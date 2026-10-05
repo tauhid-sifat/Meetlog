@@ -234,6 +234,11 @@ fn set_api_key(key: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn frontend_log(message: String) {
+    log::info!("[frontend] {message}");
+}
+
+#[tauri::command]
 fn has_api_key() -> bool {
     settings::get_api_key().is_some()
 }
@@ -297,6 +302,7 @@ pub fn run() {
             load_settings,
             save_settings,
             set_api_key,
+            frontend_log,
             has_api_key,
             get_output_dir,
             list_meetings,

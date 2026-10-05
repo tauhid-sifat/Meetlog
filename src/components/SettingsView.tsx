@@ -6,13 +6,50 @@ interface Props {
   devices: string[];
   outputDir: string;
   hasApiKey: boolean;
-  onSave: (settings: Settings, apiKey: string | null) => void;
+  onSave: (settings: Settings, apiKey: string | null) => Promise<void>;
+  onClearApiKey: () => Promise<void>;
 }
 
-export function SettingsView({ settings, devices, outputDir, hasApiKey, onSave }: Props) {
+export function SettingsView({
+  settings,
+  devices,
+  outputDir,
+  hasApiKey,
+  onSave,
+  onClearApiKey,
+}: Props) {
   const [draft, setDraft] = useState<Settings>(settings);
   const [apiKey, setApiKey] = useState("");
   const [vocabInput, setVocabInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(
+    null,
+  );
+
+  const save = async () => {
+    setSaving(true);
+    setStatus(null);
+    try {
+      await onSave(draft, apiKey.trim() || null);
+      setApiKey("");
+      setStatus({ kind: "ok", text: "Settings saved." });
+    } catch (e) {
+      setStatus({ kind: "error", text: `Save failed: ${String(e)}` });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeKey = async () => {
+    setStatus(null);
+    try {
+      await onClearApiKey();
+      setApiKey("");
+      setStatus({ kind: "ok", text: "API key removed." });
+    } catch (e) {
+      setStatus({ kind: "error", text: `Remove failed: ${String(e)}` });
+    }
+  };
 
   const addTerm = () => {
     const term = vocabInput.trim();
@@ -49,9 +86,11 @@ export function SettingsView({ settings, devices, outputDir, hasApiKey, onSave }
             placeholder={hasApiKey ? "Replace key (leave blank to keep)" : "Paste API key"}
             onChange={(e) => setApiKey(e.currentTarget.value)}
           />
-          <button className="secondary" onClick={() => setApiKey("")}>
-            Clear
-          </button>
+          {hasApiKey && (
+            <button className="secondary" onClick={removeKey}>
+              Remove stored key
+            </button>
+          )}
         </div>
       </section>
 
@@ -140,9 +179,15 @@ export function SettingsView({ settings, devices, outputDir, hasApiKey, onSave }
         </div>
       </section>
 
+      {status && (
+        <div className={`banner ${status.kind === "ok" ? "success" : "error"}`}>
+          {status.text}
+        </div>
+      )}
+
       <div className="actions">
-        <button className="primary" onClick={() => onSave(draft, apiKey || null)}>
-          Save Settings
+        <button className="primary" onClick={save} disabled={saving}>
+          {saving ? "Saving..." : "Save Settings"}
         </button>
       </div>
     </div>

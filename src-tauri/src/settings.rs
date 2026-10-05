@@ -65,6 +65,7 @@ pub fn save(app: &AppHandle, settings: &Settings) -> Result<()> {
 }
 
 pub fn set_api_key(key: &str) -> Result<()> {
+    let key = key.trim();
     let entry = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER)?;
     if key.is_empty() {
         let _ = entry.delete_credential();

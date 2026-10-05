@@ -18,6 +18,7 @@ export const api = {
   loadSettings: () => invoke<Settings>("load_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
   setApiKey: (key: string) => invoke<void>("set_api_key", { key }),
+  frontendLog: (message: string) => invoke<void>("frontend_log", { message }),
   hasApiKey: () => invoke<boolean>("has_api_key"),
   getOutputDir: () => invoke<string>("get_output_dir"),
 

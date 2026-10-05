@@ -60,12 +60,17 @@ function App() {
   const handleSaveSettings = async (next: Settings, apiKey: string | null) => {
     if (apiKey) {
       await api.setApiKey(apiKey);
-      setHasApiKey(true);
     }
     await api.saveSettings(next);
     setSettings(next);
+    setHasApiKey(await api.hasApiKey());
     setOutputDir(await api.getOutputDir());
     await refreshMeetings();
+  };
+
+  const handleClearApiKey = async () => {
+    await api.setApiKey("");
+    setHasApiKey(false);
   };
 
   return (
@@ -147,6 +152,7 @@ function App() {
             outputDir={outputDir}
             hasApiKey={hasApiKey}
             onSave={handleSaveSettings}
+            onClearApiKey={handleClearApiKey}
           />
         )}
       </main>
