@@ -1,0 +1,15 @@
+# Build configuration for the Meetlog Tauri app.
+#
+# This project lives at a path containing a space ("E:\My Code\Meetlog").
+# MinGW's windres (used by tauri-winres) does not quote paths, so building with
+# the GNU toolchain fails when the target directory is under a spaced path.
+# Pointing the target directory at a space-free location works around it.
+#
+# Toolchain: Rust stable-x86_64-pc-windows-gnu + WinLibs MinGW-w64 (on PATH).
+
+[build]
+target-dir = "C:/Users/Asthait/.meetlog/target"
+
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "ar"
