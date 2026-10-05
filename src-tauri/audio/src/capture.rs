@@ -1,0 +1,101 @@
+//! Shared capture-stream construction for cpal devices.
+//!
+//! Both the microphone and the system-audio loopback are cpal *input* streams;
+//! they differ only in which device they open (a capture device vs. a render
+//! device opened as loopback). This module holds the common plumbing.
+
+use anyhow::{anyhow, Result};
+use cpal::traits::{DeviceTrait, StreamTrait};
+use cpal::{Device, SampleFormat, Stream, StreamConfig};
+use tokio::sync::mpsc::UnboundedSender;
+
+use super::resampler::{f32_to_i16_le, StreamResampler, TARGET_SAMPLE_RATE};
+use super::AudioChunk;
+
+fn err_fn(error: cpal::StreamError) {
+    log::error!("audio stream error: {error}");
+}
+
+/// Which device config to base the stream on. Loopback capture opens an input
+/// stream but must use the render device's *output* config.
+#[derive(Clone, Copy)]
+pub enum ConfigSource {
+    Input,
+    Output,
+}
+
+/// Build and start an input stream that forwards 16 kHz mono i16 PCM tagged
+/// with `source`.
+pub fn build_capture_stream(
+    device: &Device,
+    source: &'static str,
+    sender: UnboundedSender<AudioChunk>,
+    config_source: ConfigSource,
+) -> Result<Stream> {
+    let supported = match config_source {
+        ConfigSource::Input => device.default_input_config()?,
+        ConfigSource::Output => device.default_output_config()?,
+    };
+    let sample_format = supported.sample_format();
+    let config: StreamConfig = supported.into();
+    let channels = config.channels;
+    let sample_rate = config.sample_rate.0;
+
+    log::info!(
+        "capture '{source}' on '{}': {} Hz, {} ch, {:?}",
+        device.name().unwrap_or_default(),
+        sample_rate,
+        channels,
+        sample_format
+    );
+
+    let mut resampler = StreamResampler::new(sample_rate, TARGET_SAMPLE_RATE, channels);
+
+    let emit = move |samples: Vec<f32>| {
+        if !samples.is_empty() {
+            let _ = sender.send(AudioChunk {
+                source,
+                pcm: f32_to_i16_le(&samples),
+            });
+        }
+    };
+
+    let stream = match sample_format {
+        SampleFormat::F32 => device.build_input_stream(
+            &config,
+            move |data: &[f32], _| {
+                let out = resampler.process(data);
+                emit(out);
+            },
+            err_fn,
+            None,
+        )?,
+        SampleFormat::I16 => device.build_input_stream(
+            &config,
+            move |data: &[i16], _| {
+                let floats: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
+                let out = resampler.process(&floats);
+                emit(out);
+            },
+            err_fn,
+            None,
+        )?,
+        SampleFormat::U16 => device.build_input_stream(
+            &config,
+            move |data: &[u16], _| {
+                let floats: Vec<f32> = data
+                    .iter()
+                    .map(|&s| (s as f32 - 32768.0) / 32768.0)
+                    .collect();
+                let out = resampler.process(&floats);
+                emit(out);
+            },
+            err_fn,
+            None,
+        )?,
+        other => return Err(anyhow!("unsupported sample format: {other:?}")),
+    };
+
+    stream.play()?;
+    Ok(stream)
+}

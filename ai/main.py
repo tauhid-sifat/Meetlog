@@ -89,6 +89,16 @@ class SidecarSession:
         self._metadata: MeetingMetadata | None = None
         self._started_at: datetime | None = None
         self._stopping = False
+        self._audio_chunks = 0
+        self._audio_bytes = 0
+        self._audio_by_source: dict[str, int] = {}
+
+    def stats(self) -> dict[str, Any]:
+        return {
+            "audio_chunks": self._audio_chunks,
+            "audio_bytes": self._audio_bytes,
+            "audio_by_source": self._audio_by_source,
+        }
 
     async def send(self, payload: dict[str, Any]) -> None:
         data = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
@@ -170,7 +180,10 @@ class SidecarSession:
         elif event.kind == "system":
             await self.send({"type": "system", "message": event.message})
 
-    async def audio(self, b64: str) -> None:
+    async def audio(self, b64: str, source: str = "unknown") -> None:
+        self._audio_chunks += 1
+        self._audio_bytes += len(b64) * 3 // 4  # approximate decoded size
+        self._audio_by_source[source] = self._audio_by_source.get(source, 0) + 1
         if self._provider is None:
             return
         try:
@@ -267,7 +280,7 @@ async def handle_client(
             if msg_type == "start":
                 await session.start(message.get("config", {}))
             elif msg_type == "audio":
-                await session.audio(message.get("data", ""))
+                await session.audio(message.get("data", ""), message.get("source", "unknown"))
             elif msg_type == "pause":
                 await session.pause()
             elif msg_type == "resume":
@@ -275,7 +288,7 @@ async def handle_client(
             elif msg_type == "stop":
                 await session.stop(message.get("config", {}))
             elif msg_type == "ping":
-                await session.send({"type": "pong"})
+                await session.send({"type": "pong", **session.stats()})
             else:
                 await session.send(
                     {"type": "error", "message": f"unknown message type: {msg_type}"}
