@@ -10,156 +10,136 @@ Build a Windows desktop app that captures meeting audio (microphone + system aud
 - Tauri v2 bundles Python as a single executable (PyInstaller) via `externalBin`; Rust spawns it and connects over a local TCP socket (sidecar prints its port to stdout).
 - Rust WASAPI loopback via `cpal` v0.16+ (opens an input stream on the default render device) or the `wasapi` v0.25 crate. Mic + system audio captured separately, resampled to 16kHz mono PCM.
 - Gemini Live API (`gemini-3.5-transcribe-live`): real-time STT, Bangla (`bn-BD`/`bn-IN`), automatic language detection + code-switching, `custom_vocabulary` up to 1,000 terms, VERBATIM or SMART mode. WebSocket, raw 16-bit PCM @16kHz. **Session limit: 10 minutes** (rotation required).
-- Gemini LLM handles meeting intelligence.
+- Gemini LLM (`gemini-flash-latest`) handles meeting intelligence.
 - Reference only: Stitch project `MeetMD Desktop UI System` (Precision Engineering design system). Not a build target; the spec's minimal UI (section 28) wins.
 
 **Key deviation from spec:** MVP is cloud-only. No offline/no-internet mode. Both online and in-person meetings use Gemini. Provider abstraction retained so Whisper can be added later.
+
+## Current status
+
+| Phase | Status |
+|-------|--------|
+| 0 — STT validation | **Provisionally passed** on TTS-synthesized speech; real-recording benchmark + script-normalization issue open |
+| 1 — Microphone → live transcript | Code complete and live-validated; real human microphone pending |
+| 2 — Mic + Windows system audio | Not started (blocked: Rust toolchain not installed) |
+| 3 — Transcript → Intelligence → Markdown | Code complete and live-validated |
+| 4 — Desktop UI | Not started |
+| 5 — Speaker intelligence | Not started |
+| 6 — Advanced meeting intelligence | Not started |
 
 ## Constraints, Assumptions, Risks, Unknowns
 
 | Type | Item | Mitigation |
 |------|------|------------|
 | Constraint | CPU-only dev machine | Cloud STT offloads compute; no local training. |
-| Constraint | Gemini Live 10-min session limit | Session rotation; no gap >2s at boundary. |
+| Constraint | Gemini Live 10-min session limit | Session rotation with audio buffering across the reconnect window. |
+| Constraint | Gemini free-tier quotas (TTS 10/day/model, per-model per-minute caps) | Use multiple TTS models or a paid tier for bulk benchmark synthesis. |
 | Constraint | Solo developer, no deadline | Phased; each phase is a working increment. |
-| Assumption | Gemini API key with sufficient quota | Verify in Phase 0; monitor cost. |
-| Assumption | User records 2-3 real meetings for the benchmark | User responsibility; critical path for Phase 0. |
-| Risk | Gemini Bangla accuracy below bar | Phase 0 benchmark; fallback is fine-tuned Whisper (deferred). |
+| Assumption | Gemini API key with sufficient quota | Verify before bulk runs; monitor cost. |
+| Assumption | User records real meetings for the benchmark | User responsibility; critical path. |
+| Risk | Bangla/mixed accuracy below bar on real speech | Benchmark on real recordings before any model change. |
+| Risk | Script normalization (English/Banglish rendered in Bengali script) | Investigate as a normalization issue, not an STT failure (see open issue). |
 | Risk | Echo when mixing mic + system audio | Recommend headphones; AEC in audio engine. |
-| Risk | Gemini API cost on long meetings | Usage monitoring; quota alerts. |
-| Unknown | Gemini speaker identification in-stream | Test in Phase 0; else post-meeting diarization (Phase 5). |
-| Unknown | Optimal audio chunk size for Gemini Live | Test in Phase 0; start at 100ms. |
+| Risk | Rust/WASAPI audio capture reliability | Moved earlier (Phase 2); it is a top technical risk. |
 
 ## Workspace Setup
 
-1. `git init` in `E:\My Code\Meetlog`
-2. Initial commit on `main` (`spec.md`, `.gitignore`)
-3. Create `develop` branch
-4. Create `feature/meetlog-mvp` off `develop`
+1. `git init` in `E:\My Code\Meetlog` (done)
+2. Initial commit on `main` (`spec.md`, `.gitignore`) (done)
+3. `develop` branch (done)
+4. `feature/meetlog-mvp` off `develop` (done)
 5. All work on `feature/meetlog-mvp`. No commits directly on `develop` or `main`.
 
-## Proposed File Structure
+## Roadmap (reordered — audio capture moved earlier)
+
+Audio capture is a top technical risk, so mic and system-audio capture are proven before building the polished UI.
 
 ```
-Meetlog/
-├── src-tauri/                  # Rust backend (Tauri)
-│   ├── src/
-│   │   ├── main.rs
-│   │   ├── audio/{mod,microphone,system_audio}.rs
-│   │   └── sidecar/mod.rs
-│   ├── Cargo.toml
-│   ├── tauri.conf.json
-│   └── capabilities/default.json
-├── src/                        # React/TS frontend
-│   ├── App.tsx
-│   ├── components/{TranscriptView,MeetingControls,Settings,MarkdownView}.tsx
-│   ├── hooks/useTranscript.ts
-│   └── types/index.ts
-├── ai/                         # Python sidecar
-│   ├── main.py                 # TCP server entry
-│   ├── stt/{base,gemini}.py
-│   ├── intelligence/{base,gemini}.py
-│   ├── models/transcript.py
-│   ├── render/markdown.py
-│   ├── storage/transcript.py
-│   └── requirements.txt
-├── tests/{data,integration}/
-├── docs/{benchmark/stt-benchmark.md,plans/meetlog-mvp-plan.md}
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── README.md
+Phase 0  STT validation                         [provisionally passed]
+Phase 1  Real microphone -> live transcript      [code done, real mic pending]
+Phase 2  Mic + Windows system audio (loopback)   [blocked on Rust]
+Phase 3  Transcript -> Intelligence -> Markdown  [code done, live validated]
+Phase 4  Desktop UI
+Phase 5  Speaker intelligence
+Phase 6  Advanced meeting intelligence
+Cross-Validation
 ```
 
 ---
 
-## Phase 0: STT Benchmark
+## Phase 0: STT Validation
 
-**Scope:** `tests/data/`, `ai/benchmark/`, `docs/benchmark/`
+**Goal:** prove Gemini Live is good enough for real English/Bangla meetings before committing to it.
 
-**Steps:**
-1. Record 2-3 real meetings (30+ min each) covering English, Bangla, mixed. Save to `tests/data/`.
-2. Create ground-truth transcripts (`.txt`) alongside each recording.
-3. Add `google-genai` to `ai/requirements.txt`; store API key in env var.
-4. Write `ai/benchmark/run_benchmark.py`: streams an audio file to Gemini Live, computes WER/CER per language segment.
-5. Test English, Bangla, mixed, Banglish separately; measure latency and cost.
-6. Test `custom_vocabulary` with the section 24 terms; compare WER on those terms.
-7. Test session rotation on a >10 min file.
-8. Write `docs/benchmark/stt-benchmark.md`.
+**Complete when:**
+1. Gemini Live successfully transcribes English meeting speech.
+2. Gemini Live successfully transcribes Bangla meeting speech.
+3. Mixed English/Bangla speech is usable for meeting notes.
+4. Transcript latency is acceptable for live use.
+5. Technical terms and proper names are benchmarked.
+6. Final transcript segments are not lost when stopping.
+7. Sessions longer than 10 minutes can be rotated without losing transcript continuity.
+8. Gemini does not introduce unacceptable script/language normalization.
+9. API cost is measured for a realistic meeting.
+10. The transcript can reliably feed the meeting intelligence pipeline.
 
-**Acceptance criteria:**
-- [ ] `tests/data/` contains ≥2 recordings, each ≥30 min, each with a sibling `.txt` ground-truth transcript.
-- [ ] `ai/benchmark/run_benchmark.py` runs on a given audio+transcript pair and prints WER, CER, and latency (p50/p95).
-- [ ] English segment of recording 1 reports WER; value recorded in the report (pass target ≤15%).
-- [ ] Bangla segment reports WER (pass target ≤20%); if above, the report flags "fine-tune required".
-- [ ] Mixed/Banglish segment produces a transcript without auto-translating Bangla to English.
-- [ ] Custom-vocabulary test shows improved WER on the 10 section-24 terms vs baseline; result recorded.
-- [ ] A >10 min file transcribes with no gap >2s at the 10-minute boundary (rotation verified).
-- [ ] `docs/benchmark/stt-benchmark.md` contains a table: Provider, Language, WER, CER, Latency p50/p95, Cost/hour.
-- [ ] Selected MVP provider(s) are explicitly recorded in the report.
+**Status against criteria (TTS-synthesized speech, not real meetings):**
 
----
+- [x] 1. English — WER 0.00
+- [x] 2. Bangla — WER 0.00
+- [~] 3. Mixed — WER 0.29; usable content but script issue (see 8)
+- [ ] 4. Latency — not yet measured on real-time speech
+- [~] 5. Terms/names — 4/8 cases run (names/products 3/3 preserved); rest pending quota
+- [x] 6. Finals not lost on stop — bug fixed, `audio_stream_end` flush validated
+- [x] 7. Rotation continuity — validated (4 connects, 4 segments, 0 errors)
+- [ ] 8. Script normalization — **OPEN ISSUE**
+- [ ] 9. API cost — not yet measured
+- [x] 10. Feeds intelligence — validated end-to-end
 
-## Phase 1: Microphone Transcription Prototype
+**Open issue — script normalization:** see `docs/benchmark/stt-benchmark.md`. Banglish spoken as Bengali is rendered in Bengali script; some English words inside Bengali sentences are transliterated. Treated as normalization, not recognition failure. Mitigations to evaluate: `custom_vocabulary` / `language_hints`, or a post-processing transliteration pass.
 
-**Scope:** `ai/stt/`, `ai/main.py`, `ai/cli_test.py`
-
-**Steps:**
-1. Define `STTProvider` in `ai/stt/base.py`.
-2. Implement `GeminiLiveProvider` in `ai/stt/gemini.py` with session rotation.
-3. Write `ai/main.py` as a TCP server receiving audio chunks, emitting transcript segments.
-4. Write `ai/cli_test.py`: captures mic via `sounddevice`, streams to sidecar, prints live transcript.
-5. Persist raw transcript to `transcript.json`.
-
-**Acceptance criteria:**
-- [ ] `ai/stt/base.py` defines abstract `STTProvider` with `connect/start/send_audio/receive_transcript/pause/resume/stop/disconnect`; importing it raises no errors.
-- [ ] `ai/stt/gemini.py` implements `GeminiLiveProvider(STTProvider)`; `connect()` with a valid key opens a WebSocket session.
-- [ ] `ai/main.py` prints its listening port as a single parseable integer line on startup.
-- [ ] `ai/cli_test.py` captures 30s of mic audio and prints interim + final transcript lines.
-- [ ] Saying "We should finalize this before Thursday." yields a final segment containing "Thursday" within 5s of utterance end.
-- [ ] Saying "আমাদের এটা বৃহস্পতিবারের মধ্যে ফাইনাল করতে হবে।" yields a Bangla final segment (not transliterated).
-- [ ] A mixed sentence yields one segment labeled `language: "mixed"`.
-- [ ] After stop, `transcript.json` is an array of segments each with `id, speaker, start, end, text, language`.
-- [ ] Pause stops segment growth; resume restarts it.
-- [ ] A >10 min session continues past 10 min with no dropped audio.
+**Deliverable:** `docs/benchmark/stt-benchmark.md` (preliminary) + selected providers. Real-recording benchmark outstanding.
 
 ---
 
-## Phase 2: Markdown Pipeline
+## Phase 1: Microphone → Live Transcript
 
-**Scope:** `ai/intelligence/`, `ai/models/`, `ai/render/`, `ai/storage/`
+**Goal:** speak into the real microphone and see words appear live.
+
+**Status:** code complete (`ai/stt/`, `ai/main.py`, `ai/cli_test.py`); device path smoke-tested; needs a human speaker to validate content.
 
 **Steps:**
-1. Define `MeetingIntelligenceProvider` in `ai/intelligence/base.py`.
-2. Define `StructuredMeetingData` in `ai/models/transcript.py`.
-3. Implement Gemini LLM provider in `ai/intelligence/gemini.py`.
-4. Write deterministic renderer `ai/render/markdown.py`.
-5. Omit empty sections.
-6. Write `meeting.md`, `transcript.json`, `metadata.json` to `Meetings/<date> - <title>/`.
+1. `STTProvider` interface (`ai/stt/base.py`). ✅
+2. `GeminiLiveProvider` with rotation + buffering (`ai/stt/gemini.py`). ✅
+3. TCP sidecar, port on stdout (`ai/main.py`). ✅
+4. Mic harness (`ai/cli_test.py`), `--device`, `--list-devices`. ✅
+5. Persist `transcript.json`. ✅
+6. Run a real spoken test and record quality.
 
 **Acceptance criteria:**
-- [ ] `ai/intelligence/base.py` defines `process_transcript(transcript) -> StructuredMeetingData`.
-- [ ] `StructuredMeetingData` has `title, summary, decisions[], action_items[], open_questions[], important_dates[], discussion_topics[]`.
-- [ ] A sample transcript returns a `StructuredMeetingData` that validates against the schema.
-- [ ] A transcript containing a decision yields it in `decisions`; a transcript with no decisions yields an empty `decisions` (no invented items).
-- [ ] Renderer produces Markdown with H1 title, Date/Duration/Mode/Participants block, and the spec section-18 sections.
-- [ ] If `open_questions` is empty, the output contains no `## Open Questions` heading.
-- [ ] Rendering the same fixture twice is byte-identical (deterministic).
-- [ ] Meeting folder `Meetings/<YYYY-MM-DD> - <Title>/` contains `meeting.md`, `transcript.json`, `metadata.json`.
-- [ ] `transcript.json` is unchanged by the intelligence step.
+- [x] `ai/stt/base.py` defines abstract `STTProvider` with `connect/start/send_audio/receive_transcript/pause/resume/stop/disconnect`.
+- [x] `ai/stt/gemini.py` implements `GeminiLiveProvider(STTProvider)`; `connect()` waits for the session and opens a WebSocket.
+- [x] `ai/main.py` prints its listening port as a single parseable integer line on startup.
+- [x] `ai/cli_test.py` opens the default microphone and streams 16kHz mono PCM without crashing.
+- [ ] Speaking "We should finalize this before Thursday." yields a final segment containing "Thursday" within 5s of utterance end (real mic).
+- [ ] Speaking a Bangla sentence yields a Bangla final segment (not transliterated).
+- [ ] After stop, `transcript.json` is an array of segments with `id, speaker, start, end, text, language`.
+- [x] Pause stops segment growth; resume restarts it (code path).
+- [x] A >10 min session continues past 10 min with no lost transcript (rotation validated at a lowered threshold).
 
 ---
 
-## Phase 3: Online Audio Engine
+## Phase 2: Mic + Windows System Audio
 
-**Scope:** `src-tauri/src/audio/`, `src-tauri/tauri.conf.json`, sidecar wiring
+**Goal:** capture both sides of an online meeting (microphone + WASAPI loopback).
 
 **Steps:**
-1. Scaffold Tauri v2 + React/TS project.
-2. `microphone.rs` via `cpal`; enumerate + select input device.
-3. `system_audio.rs` via `cpal` WASAPI loopback.
-4. Resample both to 16kHz mono f32; chunk (~100ms) to the sidecar over TCP.
-5. Handle device-disconnect errors cleanly.
+1. Install Rust toolchain (`rustup`).
+2. Scaffold Tauri v2 + React/TS project.
+3. `microphone.rs` via `cpal`; enumerate + select input device.
+4. `system_audio.rs` via `cpal` WASAPI loopback.
+5. Resample both to 16kHz mono f32; chunk (~100ms) to the sidecar over TCP.
+6. Handle device-disconnect errors cleanly.
 
 **Acceptance criteria:**
 - [ ] `cargo build` in `src-tauri/` and `npm run build` in `src/` complete with no errors.
@@ -169,6 +149,33 @@ Meetlog/
 - [ ] Playing a known clip through speakers yields non-silent loopback buffers (RMS > 0).
 - [ ] The sidecar logs receipt of audio chunks over TCP.
 - [ ] Unplugging the default audio device does not crash the app; capture stops with a surfaced error.
+
+---
+
+## Phase 3: Transcript → Meeting Intelligence → Markdown
+
+**Goal:** turn a transcript into a structured `meeting.md`.
+
+**Status:** code complete and live-validated (correct decision, action item with owner, open question; no invented items).
+
+**Steps:**
+1. `MeetingIntelligenceProvider` interface. ✅
+2. `StructuredMeetingData` model. ✅
+3. Gemini LLM provider with transient-error retry. ✅
+4. Deterministic Markdown renderer. ✅
+5. Meeting folder storage (`meeting.md`, `transcript.json`, `metadata.json`). ✅
+6. `pipeline.generate_meeting`. ✅
+
+**Acceptance criteria:**
+- [x] `ai/intelligence/base.py` defines `process_transcript(transcript) -> StructuredMeetingData`.
+- [x] `StructuredMeetingData` has `title, summary, decisions[], action_items[], open_questions[], important_dates[], discussion_topics[]`.
+- [x] A sample transcript returns valid structured data.
+- [x] A transcript with a decision yields it; one with no decisions yields empty (no invented items).
+- [x] Renderer produces H1 title, Date/Duration/Mode/Participants block, and section-18 sections.
+- [x] Empty sections are omitted.
+- [x] Rendering the same fixture twice is byte-identical.
+- [x] Meeting folder contains `meeting.md`, `transcript.json`, `metadata.json`.
+- [x] `transcript.json` is unchanged by the intelligence step.
 
 ---
 
@@ -207,7 +214,7 @@ Meetlog/
 
 **Steps:**
 1. Optional `audio.wav` capture (user-controlled).
-2. Post-meeting diarization (pyannote.audio or equivalent).
+2. Post-meeting diarization (pyannote.audio or Gemini diarization).
 3. Align diarization with transcript segments; assign speaker IDs.
 4. Speaker-renaming UI.
 5. Renamed speakers flow into `meeting.md`.
@@ -233,7 +240,7 @@ Meetlog/
 5. Meeting comparison.
 
 **Acceptance criteria:**
-- [ ] Decision extraction precision/recall improves over Phase 2 on the benchmark transcripts (numbers recorded).
+- [ ] Decision extraction precision/recall improves over Phase 3 on the benchmark transcripts (numbers recorded).
 - [ ] Action items include an owner when stated; unstated owners are `null`.
 - [ ] A template at `templates/custom.md.j2` can be selected and is used for rendering.
 - [ ] Meeting comparison outputs differences in decisions/action items between two meetings.

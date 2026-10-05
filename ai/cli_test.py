@@ -96,6 +96,7 @@ async def run(args: argparse.Namespace) -> int:
         channels=1,
         dtype="int16",
         blocksize=CHUNK_BYTES // 2,
+        device=args.device,
         callback=on_audio,
     )
     stream.start()
@@ -141,7 +142,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mode", default="VERBATIM", choices=["VERBATIM", "SMART"])
     parser.add_argument("--diarization", action="store_true")
     parser.add_argument("--api-key", default="")
+    parser.add_argument("--device", type=int, default=None, help="input device index")
     parser.add_argument("--out", default="transcript.json")
+    parser.add_argument("--list-devices", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     return parser
 
@@ -150,6 +153,9 @@ def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     args = build_parser().parse_args()
+    if args.list_devices:
+        print(sd.query_devices())
+        return
     args.vocab = [t.strip() for t in args.vocab.split(",") if t.strip()]
     try:
         raise SystemExit(asyncio.run(run(args)))

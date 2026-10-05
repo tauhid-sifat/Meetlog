@@ -5,7 +5,10 @@ low-latency streaming transcription with automatic language detection,
 code-switching, custom vocabulary, and optional speaker diarization.
 
 The provider transparently rotates the underlying WebSocket session before the
-API's 10-minute cap so long meetings keep transcribing without interruption.
+API's 10-minute cap so long meetings keep transcribing without interruption:
+before rotating it asks the model to flush final transcripts, and any audio
+captured during the reconnect window is buffered and replayed into the new
+session so nothing is lost.
 """
 
 from __future__ import annotations
@@ -26,6 +29,7 @@ from ai.models.transcript import TranscriptEvent
 from ai.stt.base import STTProvider
 
 _SENTINEL = object()
+_AUDIO_MIME = "audio/pcm;rate=16000"
 
 
 class GeminiLiveProvider(STTProvider):
@@ -44,6 +48,7 @@ class GeminiLiveProvider(STTProvider):
         response_modalities: list[str] | None = None,
         max_consecutive_errors: int = 5,
         connect_timeout: float = 15.0,
+        flush_wait_seconds: float = 1.5,
     ) -> None:
         if not api_key:
             raise ValueError("GeminiLiveProvider requires an API key")
@@ -58,6 +63,7 @@ class GeminiLiveProvider(STTProvider):
         self._response_modalities = response_modalities or ["TEXT"]
         self._max_consecutive_errors = max_consecutive_errors
         self._connect_timeout = connect_timeout
+        self._flush_wait_seconds = flush_wait_seconds
 
         self._client: genai.Client | None = None
         self._session: types.AsyncSession | None = None  # type: ignore[name-defined]
@@ -69,6 +75,9 @@ class GeminiLiveProvider(STTProvider):
         self._started = False
         self._paused = False
         self._stopped = False
+        self._rotating = False
+        self._pending: list[bytes] = []
+        self._max_pending = 300  # ~30s of 100ms chunks
         self._clock_start = 0.0
         self._pending_start: float | None = None
 
@@ -116,6 +125,9 @@ class GeminiLiveProvider(STTProvider):
                     consecutive_errors = 0
                     self._ready.set()
                     self._emit(TranscriptEvent.system("session_connected"))
+                    # Replay audio buffered during the rotation window.
+                    await self._flush_pending()
+                    self._rotating = False
                     rotator = asyncio.create_task(
                         self._rotate_after(session, self._session_max_seconds),
                         name="gemini-live-rotator",
@@ -129,27 +141,56 @@ class GeminiLiveProvider(STTProvider):
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001 - surfaced to the client
-                consecutive_errors += 1
-                self._emit(TranscriptEvent.error(f"{type(exc).__name__}: {exc}"))
-                if consecutive_errors >= self._max_consecutive_errors:
-                    self._emit(
-                        TranscriptEvent.error(
-                            "Gemini Live: too many consecutive failures, giving up"
+                if self._rotating:
+                    # Expected: the watchdog closed the session to rotate it.
+                    pass
+                else:
+                    consecutive_errors += 1
+                    self._emit(TranscriptEvent.error(f"{type(exc).__name__}: {exc}"))
+                    if consecutive_errors >= self._max_consecutive_errors:
+                        self._emit(
+                            TranscriptEvent.error(
+                                "Gemini Live: too many consecutive failures, giving up"
+                            )
                         )
-                    )
-                    break
-                await asyncio.sleep(min(2 ** consecutive_errors, 10))
-                continue
-            # Rotate: brief pause so the old socket fully closes.
+                        break
+                    await asyncio.sleep(min(2 ** consecutive_errors, 10))
+                    continue
+            # Brief pause so the old socket fully closes before reconnecting.
             if not self._stopped:
                 await asyncio.sleep(0.2)
 
     async def _rotate_after(self, session, seconds: float) -> None:
+        """Flush finals, then close the session so the supervisor reconnects."""
         try:
             await asyncio.sleep(seconds)
+            self._rotating = True
+            try:
+                await session.send_realtime_input(audio_stream_end=True)
+            except Exception:  # noqa: BLE001 - best effort flush
+                pass
+            await asyncio.sleep(self._flush_wait_seconds)
             await session.close()
-        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+        except asyncio.CancelledError:
             pass
+        except Exception:  # noqa: BLE001 - supervisor handles reconnection
+            pass
+
+    async def _flush_pending(self) -> None:
+        async with self._lock:
+            pending, self._pending = self._pending, []
+            session = self._session
+            if session is None:
+                self._pending = pending + self._pending
+                return
+            for i, chunk in enumerate(pending):
+                try:
+                    await session.send_realtime_input(
+                        audio=types.Blob(data=chunk, mime_type=_AUDIO_MIME)
+                    )
+                except Exception:  # noqa: BLE001 - keep the rest for next time
+                    self._pending = pending[i:] + self._pending
+                    return
 
     def _handle_message(self, message) -> None:
         server_content = getattr(message, "server_content", None)
@@ -194,15 +235,25 @@ class GeminiLiveProvider(STTProvider):
     async def send_audio(self, pcm: bytes) -> None:
         if self._paused or self._stopped or not pcm:
             return
-        session = self._session
-        if session is None:
-            # Dropping audio during the brief rotation window. The raw audio
-            # recording (Phase 5) remains the recovery source.
+        if self._rotating:
+            self._buffer(pcm)
             return
         async with self._lock:
-            await session.send_realtime_input(
-                audio=types.Blob(data=pcm, mime_type="audio/pcm;rate=16000")
-            )
+            session = self._session
+            if session is None:
+                self._buffer(pcm)
+                return
+            try:
+                await session.send_realtime_input(
+                    audio=types.Blob(data=pcm, mime_type=_AUDIO_MIME)
+                )
+            except Exception:  # noqa: BLE001 - session closed mid-rotation
+                self._buffer(pcm)
+
+    def _buffer(self, pcm: bytes) -> None:
+        self._pending.append(pcm)
+        if len(self._pending) > self._max_pending:
+            del self._pending[: len(self._pending) - self._max_pending]
 
     async def receive_transcript(self) -> AsyncIterator[TranscriptEvent]:
         while not self._stopped:

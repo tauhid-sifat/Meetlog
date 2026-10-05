@@ -40,15 +40,45 @@ substitute for real meeting audio.
 | Gemini Live | gemini-3.5-transcribe-live | Bangla | 0.00 | 0.00 | exact |
 | Gemini Live | gemini-3.5-transcribe-live | Mixed | 0.29 | 0.36 | see below |
 
-**Mixed-language finding:** the model wrote the English words inside a mixed
-utterance using Bengali script rather than Latin script. For
-`আমাদের Thursday-এর মধ্যে এটা finalize করতে হবে।` the model returned
-`আমাদের থার্সডে-র মধ্যে এটা ফাইনালইজ করতে হবে।` (Thursday → থার্সডে,
-finalize → ফাইনালইজ). WER/CER penalise this even though it is phonetically
-correct. The spec (section 10) expects Latin script for code-switched English.
-Possible mitigations to evaluate: a `language_hints`/`custom_vocabulary` entry
-per English term, or a post-processing transliteration pass. Tracked as an
-open issue.
+**Mixed-language finding (refined):** script behavior depends on the
+surrounding script.
+
+- English words inside a Bengali-script sentence may be transliterated. For
+  `আমাদের Thursday-এর মধ্যে এটা finalize করতে হবে।` the model returned
+  `আমাদের থার্সডে-র মধ্যে এটা ফাইনালইজ করতে হবে।` (Thursday → থার্সডে,
+  finalize → ফাইনালইজ).
+- English words inside Latin/Banglish text are preserved: `Thursday te client
+  review ache.` came back verbatim.
+- Romanized Bangla (Banglish) spoken as Bengali is rendered in Bengali script:
+  `Eta basically existing workflow-er sathei integrate hobe.` became
+  `এটা বেসিক্যালি এক্সিস্টিং ওয়ার্কফ্লোর সাথে ইন্টিগ্রেট হবে।`
+
+This is a **normalization** issue, not a recognition failure: the model
+understands the words and chooses script. WER/CER penalise the script change.
+The spec (section 10) expects Latin script for code-switched English. Possible
+mitigations: `custom_vocabulary` / `language_hints` per term, or a
+post-processing transliteration pass. Tracked as an open issue.
+
+### Terminology / script preservation
+
+Run with `scripts/validate_terminology.py` (TTS via `gemini-3.8-flash-tts`).
+Free-tier TTS quota (10/day for `gemini-2.5-flash-tts`, 3/min for
+`gemini-3.8-flash-tts`) stopped the run after 4 of 8 cases.
+
+| Case | Spoken | Transcript | WER | Latin tokens kept |
+|------|--------|------------|-----|-------------------|
+| English in Bangla | `Thursday te client review ache.` | `Thursday te client review ache.` | 0.00 | 3/3 |
+| Bangla in English | `We should finalize it, kintu deadline ta tight.` | verbatim | 0.00 | 2/2 |
+| Banglish | `Eta basically existing workflow-er sathei integrate hobe.` | `এটা বেসিক্যালি এক্সিস্টিং ওয়ার্কফ্লোর সাথে ইন্টিগ্রেট হবে।` | 1.00 | 0/4 |
+| Names / products | `Constance will update the Figma file and open a Jira ticket.` | verbatim | 0.00 | 3/3 |
+| Dates / numbers | `The deadline is October 8, 2026 at 3 PM.` | — | — | pending quota |
+| Technical in Bangla | `আমাদের RBAC আর IAM নিয়ে কাজ করতে হবে।` | — | — | pending quota |
+| Internal terms | `Please check the FortiMapp endpoint and the Caboodle integration.` | — | — | pending quota |
+| Count in Bangla | `Meeting e 25 jon attend korbe.` | — | — | pending quota |
+
+Preliminary read: proper nouns and product names in Latin sentences are
+preserved reliably; the problem is concentrated in Banglish and English words
+embedded in Bengali script.
 
 ### Real meeting recordings
 
@@ -60,15 +90,26 @@ open issue.
 
 ## Custom vocabulary
 
+Not yet measured (pending TTS/API quota). Run
+`scripts/validate_terminology.py --vocab "Thursday,FortiMapp,Caboodle,RBAC,IAM,Jira,Figma"`
+and compare against the baseline above.
+
 | Terms | WER (baseline) | WER (with vocabulary) | Delta |
 |-------|----------------|-----------------------|-------|
-| 10 section-24 terms | — | — | — |
+| section-24 terms | — | — | pending |
 
 ## Session rotation
 
-| Audio length | Gap at 10-min boundary | Dropped audio |
-|--------------|------------------------|---------------|
-| — | — | — |
+Validated with `scripts/validate_rotation.py` at a lowered rotation interval
+(45s of audio, rotate every 12s) to exercise the >10-minute path quickly. The
+provider flushes finals before rotating and buffers audio across the reconnect
+window.
+
+| Audio length | Rotation interval | Session connects | Segments | Errors | Result |
+|--------------|-------------------|------------------|----------|--------|--------|
+| 45s (looped) | 12s | 4 | 4 | 0 | PASS |
+
+Real 10-minute sessions still to be run end-to-end.
 
 ## Decision
 

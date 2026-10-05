@@ -11,18 +11,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import re
 import sys
-import wave
 from pathlib import Path
 
 from google import genai
-from google.genai import types
 
 from ai.benchmark.run_benchmark import benchmark_file
 from ai.config import api_key
+from scripts.tts import synthesize
 
-TTS_MODEL = "gemini-2.5-flash-preview-tts"
 LIVE_MODEL = "gemini-3.5-transcribe-live"
 
 CASES = [
@@ -30,36 +27,6 @@ CASES = [
     ("bangla", "আমাদের এটা বৃহস্পতিবারের মধ্যে ফাইনাল করতে হবে।"),
     ("mixed", "আমাদের Thursday-এর মধ্যে এটা finalize করতে হবে।"),
 ]
-
-
-def write_wav(path: Path, pcm: bytes, rate: int, channels: int = 1, width: int = 2) -> None:
-    with wave.open(str(path), "wb") as wav:
-        wav.setnchannels(channels)
-        wav.setsampwidth(width)
-        wav.setframerate(rate)
-        wav.writeframes(pcm)
-
-
-def synthesize(client: genai.Client, text: str, out_path: Path, voice: str) -> None:
-    response = client.models.generate_content(
-        model=TTS_MODEL,
-        contents=text,
-        config=types.GenerateContentConfig(
-            response_modalities=["AUDIO"],
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
-                )
-            ),
-        ),
-    )
-    part = response.candidates[0].content.parts[0]
-    inline = part.inline_data
-    if inline is None or inline.data is None:
-        raise RuntimeError("TTS returned no audio")
-    rate_match = re.search(r"rate=(\d+)", inline.mime_type or "")
-    rate = int(rate_match.group(1)) if rate_match else 24000
-    write_wav(out_path, inline.data, rate)
 
 
 async def run(args: argparse.Namespace) -> int:
