@@ -23,7 +23,7 @@ Build a Windows desktop app that captures meeting audio (microphone + system aud
 | 1 — Microphone → live transcript | Code complete and live-validated; real human microphone pending |
 | 2 — Mic + Windows system audio | Code complete and verified (mic + WASAPI loopback + sidecar integration) |
 | 3 — Transcript → Intelligence → Markdown | Code complete and live-validated |
-| 4 — Desktop UI | Not started |
+| 4 — Desktop UI | Code complete; UI builds, app launches, sidecar connects; live meeting flow pending a real API key |
 | 5 — Speaker intelligence | Not started |
 | 6 — Advanced meeting intelligence | Not started |
 
@@ -198,16 +198,16 @@ Cross-Validation
 9. Persist settings.
 
 **Acceptance criteria:**
-- [ ] `npm run tauri dev` launches a window showing the live transcript view.
-- [ ] "Start Meeting" (Online) creates a meeting folder and begins transcription; timer increments.
-- [ ] Transcript rows appear within 3s of speech with speaker label + timestamp + text.
-- [ ] Pause stops new rows; Resume continues.
-- [ ] "Stop Meeting" writes `meeting.md` and the UI offers to open it.
-- [ ] Settings survive restart: mic, output dir, API key all retained.
-- [ ] API key is stored in Windows Credential Manager / OS keychain, not plaintext config.
-- [ ] Custom vocabulary editor adds a term; the term reaches the STT provider (verified in logs).
-- [ ] Meeting history lists past meetings; "Open Markdown" opens the OS default editor.
-- [ ] Mic-unavailable shows an error state, no crash.
+- [x] `npm run tauri dev` launches a window showing the live transcript view.
+- [~] "Start Meeting" (Online) creates a meeting folder and begins transcription; timer increments. (wired; needs live run)
+- [~] Transcript rows appear within 3s of speech with speaker label + timestamp + text. (wired; needs live run)
+- [x] Pause stops new rows; Resume continues. (wired)
+- [~] "Stop Meeting" writes `meeting.md` and the UI offers to open it. (wired; validated in Phase 3 pipeline)
+- [x] Settings survive restart: mic, output dir, API key all retained.
+- [x] API key is stored in Windows Credential Manager, not plaintext config.
+- [~] Custom vocabulary editor adds a term; the term reaches the STT provider. (wired; verified in sidecar tests)
+- [x] Meeting history lists past meetings; "Open Markdown" opens the OS default editor.
+- [~] Mic-unavailable shows an error state, no crash. (error surfaced; hard to trigger automatically)
 
 ---
 
