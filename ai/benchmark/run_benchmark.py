@@ -57,6 +57,8 @@ async def benchmark_file(
     mode: str = "VERBATIM",
     diarization: bool = False,
     realtime: bool = True,
+    system_instruction: str | None = None,
+    language_hints: list[str] | None = None,
 ) -> dict:
     """Transcribe ``audio_path`` and score it against ``reference``."""
     pcm = read_wav_mono_16k(audio_path)
@@ -66,7 +68,9 @@ async def benchmark_file(
         key,
         model=model,
         language_codes=language_codes or [],
+        language_hints=language_hints or [],
         custom_vocabulary=vocabulary or [],
+        system_instruction=system_instruction,
         mode=mode,
         diarization=diarization,
     )

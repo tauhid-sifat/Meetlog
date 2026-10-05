@@ -41,7 +41,9 @@ class GeminiLiveProvider(STTProvider):
         *,
         model: str = GEMINI_LIVE_MODEL,
         language_codes: list[str] | None = None,
+        language_hints: list[str] | None = None,
         custom_vocabulary: list[str] | None = None,
+        system_instruction: str | None = None,
         mode: str = TRANSCRIPTION_MODE,
         diarization: bool = False,
         session_max_seconds: float = SESSION_MAX_SECONDS,
@@ -56,7 +58,9 @@ class GeminiLiveProvider(STTProvider):
         self._api_key = api_key
         self._model = model
         self._language_codes = list(language_codes or [])
+        self._language_hints = list(language_hints or [])
         self._custom_vocabulary = list(custom_vocabulary or [])
+        self._system_instruction = system_instruction
         self._mode = mode
         self._diarization = diarization
         self._session_max_seconds = session_max_seconds
@@ -78,6 +82,7 @@ class GeminiLiveProvider(STTProvider):
         self._rotating = False
         self._pending: list[bytes] = []
         self._max_pending = 300  # ~30s of 100ms chunks
+        self._last_error: str | None = None
         self._clock_start = 0.0
         self._pending_start: float | None = None
 
@@ -85,8 +90,14 @@ class GeminiLiveProvider(STTProvider):
     def _build_config(self) -> types.LiveConnectConfig:
         return types.LiveConnectConfig(
             response_modalities=self._response_modalities,
+            system_instruction=self._system_instruction,
             input_audio_transcription=types.AudioTranscriptionConfig(
                 language_codes=self._language_codes or None,
+                language_hints=(
+                    types.LanguageHints(language_codes=self._language_hints)
+                    if self._language_hints
+                    else None
+                ),
                 custom_vocabulary=self._custom_vocabulary or None,
                 mode=types.AudioTranscriptionConfigMode(self._mode),
                 diarization=self._diarization,
@@ -108,9 +119,10 @@ class GeminiLiveProvider(STTProvider):
         try:
             await asyncio.wait_for(self._ready.wait(), timeout=self._connect_timeout)
         except asyncio.TimeoutError as exc:
+            detail = f" (last error: {self._last_error})" if self._last_error else ""
             raise RuntimeError(
                 "Gemini Live session did not open within "
-                f"{self._connect_timeout:.0f}s"
+                f"{self._connect_timeout:.0f}s{detail}"
             ) from exc
 
     async def _supervise(self) -> None:
@@ -146,7 +158,8 @@ class GeminiLiveProvider(STTProvider):
                     pass
                 else:
                     consecutive_errors += 1
-                    self._emit(TranscriptEvent.error(f"{type(exc).__name__}: {exc}"))
+                    self._last_error = f"{type(exc).__name__}: {exc}"
+                    self._emit(TranscriptEvent.error(self._last_error))
                     if consecutive_errors >= self._max_consecutive_errors:
                         self._emit(
                             TranscriptEvent.error(

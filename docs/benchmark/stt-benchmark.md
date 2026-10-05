@@ -80,6 +80,39 @@ Preliminary read: proper nouns and product names in Latin sentences are
 preserved reliably; the problem is concentrated in Banglish and English words
 embedded in Bengali script.
 
+### Ablation: script-normalization mitigations
+
+Run with `scripts/experiment_script.py` on the cached `mixed` and `banglish`
+clips (no TTS quota used). Variants: baseline, `system_instruction`,
+`custom_vocabulary`, both, `language_hints`.
+
+| Clip | Variant | WER | Latin chars | Transcript |
+|------|---------|-----|-------------|------------|
+| mixed | baseline | 0.29 | 0 | `আমাদের থার্সডে-র মধ্যে এটা ফাইনালইজ করতে হবে।` |
+| mixed | system_instruction | 0.29 | 0 | (unchanged) |
+| mixed | custom_vocabulary | 0.29 | 0 | (unchanged) |
+| mixed | language_hints `en-US` | 1.00 | 42 | `Amader Thursday er modhye eta finalize korte hobe.` |
+| banglish | baseline | 1.00 | 0 | `এটা বেসিক্যালি এক্সিস্টিং ওয়ার্কফ্লোর সাথে ইন্টিগ্রেট হবে।` |
+| banglish | system_instruction | 1.00 | 0 | (unchanged) |
+| banglish | **custom_vocabulary** | **0.71** | **34** | `এটা basically existing workflow এর সাথে integrate হবে।` |
+| banglish | language_hints `en-US` | 0.29 | 46 | `Eta basically existing workflow sathe integrate hobe.` |
+
+**Conclusions:**
+- `system_instruction` has **no effect** on the transcribe-live model.
+- `custom_vocabulary` is a **partial mitigation**: listed English terms are
+  kept in Latin script when the model would otherwise use Bengali script
+  (banglish WER 1.00 → 0.71) **without** breaking Bengali script.
+- `language_hints` (a `LanguageHints(language_codes=[...])` object, not a plain
+  list) forces the output script: `en-US` romanizes the Bengali
+  (`আমাদের` → `Amader`), which is wrong for Bengali meetings. Not suitable as a
+  global setting.
+
+**Recommended direction:** populate `custom_vocabulary` with the meeting's
+English product names and technical terms (already planned, spec section 24) as
+a first-line mitigation. General English words embedded in Bengali script may
+still be transliterated; evaluate a post-processing transliteration pass for
+those, but do not switch models.
+
 ### Real meeting recordings
 
 | Provider | Model | Language | WER | CER | Latency p50 (s) | Latency p95 (s) | Cost/hour | Notes |
