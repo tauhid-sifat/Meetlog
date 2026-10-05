@@ -29,17 +29,6 @@ pub struct Sidecar {
 }
 
 impl Sidecar {
-    /// Send a raw JSON message (one line) to the sidecar.
-    pub fn send(&self, message: String) -> Result<()> {
-        self.tx
-            .send(message)
-            .map_err(|_| anyhow!("sidecar writer closed"))
-    }
-
-    pub fn send_json(&self, value: serde_json::Value) -> Result<()> {
-        self.send(value.to_string())
-    }
-
     /// A cloneable sender for callers that push many messages (e.g. audio).
     pub fn sender(&self) -> UnboundedSender<String> {
         self.tx.clone()
