@@ -113,8 +113,8 @@ async def run(args: argparse.Namespace) -> int:
         stream.close()
         await queue.put(None)
         await sender_task
-        await provider.stop()
-        await asyncio.sleep(1.0)
+        await provider.stop()  # flush final transcripts
+        await asyncio.sleep(2.0)
         await provider.disconnect()
         receiver_task.cancel()
         try:
@@ -147,6 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     args = build_parser().parse_args()
     args.vocab = [t.strip() for t in args.vocab.split(",") if t.strip()]
     try:

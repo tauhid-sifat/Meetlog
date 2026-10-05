@@ -6,9 +6,11 @@ JSON. The model supplies data only; the Markdown renderer controls formatting.
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from ai.config import GEMINI_LLM_MODEL
@@ -58,19 +60,32 @@ class GeminiIntelligenceProvider(MeetingIntelligenceProvider):
             return StructuredMeetingData(title="Meeting")
 
         prompt = self._render_prompt(transcript)
-        response = await self._client.aio.models.generate_content(
-            model=self._model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=_SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                temperature=0.2,
-            ),
-        )
+        response = await self._generate_with_retry(prompt)
 
         text = (response.text or "").strip()
         data = self._parse_json(text)
         return StructuredMeetingData.from_dict(data)
+
+    async def _generate_with_retry(self, prompt: str, attempts: int = 4):
+        """Retry transient server errors (e.g. 503 high demand) with backoff."""
+        last_error: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                return await self._client.aio.models.generate_content(
+                    model=self._model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=_SYSTEM_INSTRUCTION,
+                        response_mime_type="application/json",
+                        temperature=0.2,
+                    ),
+                )
+            except genai_errors.ServerError as exc:
+                last_error = exc
+                if attempt < attempts - 1:
+                    await asyncio.sleep(2 ** attempt)
+        assert last_error is not None
+        raise last_error
 
     @staticmethod
     def _render_prompt(transcript: Transcript) -> str:

@@ -92,9 +92,8 @@ async def benchmark_file(
         await provider.send_audio(chunk)
         if realtime:
             await asyncio.sleep(CHUNK_MS / 1000)
-    await asyncio.sleep(2.0)  # allow trailing finals to arrive
-    await provider.stop()
-    await asyncio.sleep(1.0)
+    await provider.stop()  # signal audio_stream_end so finals flush
+    await asyncio.sleep(3.0)  # allow trailing finals to arrive
     await provider.disconnect()
     recv_task.cancel()
     try:

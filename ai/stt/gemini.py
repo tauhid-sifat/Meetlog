@@ -43,6 +43,7 @@ class GeminiLiveProvider(STTProvider):
         session_max_seconds: float = SESSION_MAX_SECONDS,
         response_modalities: list[str] | None = None,
         max_consecutive_errors: int = 5,
+        connect_timeout: float = 15.0,
     ) -> None:
         if not api_key:
             raise ValueError("GeminiLiveProvider requires an API key")
@@ -56,11 +57,13 @@ class GeminiLiveProvider(STTProvider):
         self._session_max_seconds = session_max_seconds
         self._response_modalities = response_modalities or ["TEXT"]
         self._max_consecutive_errors = max_consecutive_errors
+        self._connect_timeout = connect_timeout
 
         self._client: genai.Client | None = None
         self._session: types.AsyncSession | None = None  # type: ignore[name-defined]
         self._events: asyncio.Queue = asyncio.Queue()
         self._supervisor: asyncio.Task | None = None
+        self._ready = asyncio.Event()
         self._lock = asyncio.Lock()
 
         self._started = False
@@ -87,9 +90,19 @@ class GeminiLiveProvider(STTProvider):
             self._client = genai.Client(api_key=self._api_key)
         self._stopped = False
         self._clock_start = time.monotonic()
+        self._ready.clear()
         self._supervisor = asyncio.create_task(
             self._supervise(), name="gemini-live-supervisor"
         )
+        # Do not return until the first session is actually open, otherwise the
+        # caller's early audio (and stream-end signal) would be dropped.
+        try:
+            await asyncio.wait_for(self._ready.wait(), timeout=self._connect_timeout)
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError(
+                "Gemini Live session did not open within "
+                f"{self._connect_timeout:.0f}s"
+            ) from exc
 
     async def _supervise(self) -> None:
         """Keep a live session open, rotating it before the 10-minute cap."""
@@ -101,6 +114,7 @@ class GeminiLiveProvider(STTProvider):
                 ) as session:
                     self._session = session
                     consecutive_errors = 0
+                    self._ready.set()
                     self._emit(TranscriptEvent.system("session_connected"))
                     rotator = asyncio.create_task(
                         self._rotate_after(session, self._session_max_seconds),
@@ -204,7 +218,18 @@ class GeminiLiveProvider(STTProvider):
         self._paused = False
 
     async def stop(self) -> None:
+        """Stop accepting audio and ask the model to flush final transcripts.
+
+        The Live API only finalizes a turn's transcript when it detects silence
+        or receives an explicit stream-end signal, so we send one here.
+        """
         self._started = False
+        session = self._session
+        if session is not None:
+            try:
+                await session.send_realtime_input(audio_stream_end=True)
+            except Exception:  # noqa: BLE001 - best effort flush
+                pass
 
     async def disconnect(self) -> None:
         self._stopped = True

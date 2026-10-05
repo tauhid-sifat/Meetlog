@@ -127,7 +127,14 @@ class SidecarSession:
             mode=config.get("transcription_mode", "VERBATIM"),
             diarization=bool(config.get("diarization", False)),
         )
-        await self._provider.connect()
+        try:
+            await self._provider.connect()
+        except Exception as exc:  # noqa: BLE001 - report, don't crash
+            await self._provider.disconnect()
+            await self.send(
+                {"type": "error", "message": f"connect failed: {exc}"}
+            )
+            return
         await self._provider.start()
         self._forwarder = asyncio.create_task(self._forward_events())
         await self.send({"type": "ready"})
@@ -187,7 +194,8 @@ class SidecarSession:
         self._stopping = True
 
         if self._provider is not None:
-            await self._provider.stop()
+            await self._provider.stop()  # flush final transcripts
+            await asyncio.sleep(1.5)
             await self._provider.disconnect()
         if self._forwarder is not None:
             self._forwarder.cancel()

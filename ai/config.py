@@ -22,7 +22,7 @@ CHUNK_BYTES = SAMPLE_RATE * SAMPLE_WIDTH * CHUNK_MS // 1000  # 3200 bytes / 100 
 GEMINI_LIVE_MODEL = os.environ.get(
     "MEETLOG_GEMINI_LIVE_MODEL", "gemini-3.5-transcribe-live"
 )
-GEMINI_LLM_MODEL = os.environ.get("MEETLOG_GEMINI_LLM_MODEL", "gemini-2.5-flash")
+GEMINI_LLM_MODEL = os.environ.get("MEETLOG_GEMINI_LLM_MODEL", "gemini-flash-latest")
 GEMINI_API_KEY_ENV = "GEMINI_API_KEY"
 
 # Gemini Live sessions are capped at 10 minutes; rotate a little before that.
