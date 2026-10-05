@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+target/
+
+# Environment / secrets
+.env
+.env.*
+*.key
+secrets/
+
+# Meeting output (local data)
+Meetings/
+tests/data/**/*.wav
+tests/data/**/*.mp3
+tests/data/**/*.m4a
+!tests/data/**/.gitkeep
+
+# Build artifacts
+ai/build/
+ai/dist/
+*.spec
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
