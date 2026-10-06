@@ -1,0 +1,28 @@
+# Meeting: {{ data.title or metadata.title or 'Meeting' }}
+
+{% if data.summary and data.summary.strip() %}
+## Summary
+
+{{ data.summary.strip() }}
+
+{% endif %}
+{% if data.decisions %}
+## Decisions
+
+{% for decision in data.decisions %}
+{% if decision.text.strip() %}
+- {{ decision.text.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% if data.action_items %}
+## Action Items
+
+{% for item in data.action_items %}
+{% if item.text.strip() %}
+- [ ] {{ item.owner + ': ' if item.owner else '' }}{{ item.text.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}

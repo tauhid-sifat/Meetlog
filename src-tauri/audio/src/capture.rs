@@ -32,9 +32,18 @@ pub fn build_capture_stream(
     sender: UnboundedSender<AudioChunk>,
     config_source: ConfigSource,
 ) -> Result<Stream> {
+    let device_label = device.name().unwrap_or_default();
     let supported = match config_source {
-        ConfigSource::Input => device.default_input_config()?,
-        ConfigSource::Output => device.default_output_config()?,
+        ConfigSource::Input => device.default_input_config().map_err(|e| {
+            anyhow!(
+                "capture '{source}': default input config for device '{device_label}': {e}"
+            )
+        })?,
+        ConfigSource::Output => device.default_output_config().map_err(|e| {
+            anyhow!(
+                "capture '{source}': default output config for device '{device_label}': {e}"
+            )
+        })?,
     };
     let sample_format = supported.sample_format();
     let config: StreamConfig = supported.into();
@@ -61,41 +70,59 @@ pub fn build_capture_stream(
     };
 
     let stream = match sample_format {
-        SampleFormat::F32 => device.build_input_stream(
-            &config,
-            move |data: &[f32], _| {
-                let out = resampler.process(data);
-                emit(out);
-            },
-            err_fn,
-            None,
-        )?,
-        SampleFormat::I16 => device.build_input_stream(
-            &config,
-            move |data: &[i16], _| {
-                let floats: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
-                let out = resampler.process(&floats);
-                emit(out);
-            },
-            err_fn,
-            None,
-        )?,
-        SampleFormat::U16 => device.build_input_stream(
-            &config,
-            move |data: &[u16], _| {
-                let floats: Vec<f32> = data
-                    .iter()
-                    .map(|&s| (s as f32 - 32768.0) / 32768.0)
-                    .collect();
-                let out = resampler.process(&floats);
-                emit(out);
-            },
-            err_fn,
-            None,
-        )?,
-        other => return Err(anyhow!("unsupported sample format: {other:?}")),
+        SampleFormat::F32 => device
+            .build_input_stream(
+                &config,
+                move |data: &[f32], _| {
+                    let out = resampler.process(data);
+                    emit(out);
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| {
+                anyhow!("capture '{source}': build input stream (F32) on '{device_label}': {e}")
+            })?,
+        SampleFormat::I16 => device
+            .build_input_stream(
+                &config,
+                move |data: &[i16], _| {
+                    let floats: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
+                    let out = resampler.process(&floats);
+                    emit(out);
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| {
+                anyhow!("capture '{source}': build input stream (I16) on '{device_label}': {e}")
+            })?,
+        SampleFormat::U16 => device
+            .build_input_stream(
+                &config,
+                move |data: &[u16], _| {
+                    let floats: Vec<f32> = data
+                        .iter()
+                        .map(|&s| (s as f32 - 32768.0) / 32768.0)
+                        .collect();
+                    let out = resampler.process(&floats);
+                    emit(out);
+                },
+                err_fn,
+                None,
+            )
+            .map_err(|e| {
+                anyhow!("capture '{source}': build input stream (U16) on '{device_label}': {e}")
+            })?,
+        other => {
+            return Err(anyhow!(
+                "capture '{source}': unsupported sample format on '{device_label}': {other:?}"
+            ))
+        }
     };
 
-    stream.play()?;
+    stream.play().map_err(|e| {
+        anyhow!("capture '{source}': start stream on '{device_label}': {e}")
+    })?;
     Ok(stream)
 }

@@ -11,7 +11,10 @@ use super::AudioChunk;
 pub fn list_input_devices() -> Result<Vec<String>> {
     let host = cpal::default_host();
     let mut names = Vec::new();
-    for device in host.input_devices()? {
+    let devices = host
+        .input_devices()
+        .map_err(|e| anyhow!("list input devices: {e}"))?;
+    for device in devices {
         if let Ok(name) = device.name() {
             names.push(name);
         }
@@ -27,7 +30,8 @@ pub fn build_stream(
     let host = cpal::default_host();
     let device = match device_name {
         Some(name) => host
-            .input_devices()?
+            .input_devices()
+            .map_err(|e| anyhow!("open input device '{name}': enumerate devices: {e}"))?
             .find(|d| d.name().map(|n| n == name).unwrap_or(false))
             .ok_or_else(|| anyhow!("input device not found: {name}"))?,
         None => host

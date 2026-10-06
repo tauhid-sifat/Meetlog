@@ -1,0 +1,120 @@
+# Meeting: {{ data.title or metadata.title or 'Meeting' }}
+
+{% if metadata.date %}
+**Date:** {{ format_date(metadata.date) }}
+{% endif %}
+{% if metadata.duration_seconds %}
+**Duration:** {{ format_duration(metadata.duration_seconds) }}
+{% endif %}
+{% if metadata.mode %}
+**Mode:** {{ metadata.mode.capitalize() }}
+{% endif %}
+{% if metadata.participants %}
+**Participants:** {{ metadata.participants | join(', ') }}
+{% endif %}
+
+{% if data.summary and data.summary.strip() %}
+## Summary
+
+{{ data.summary.strip() }}
+
+{% endif %}
+{% if data.discussion_topics %}
+## Discussion
+
+{% for topic in data.discussion_topics %}
+{% if topic.title and topic.title.strip() %}
+### {{ topic.title.strip() }}
+
+{% for point in topic.points %}
+{% if point.strip() %}
+- {{ point.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+{% if data.decisions %}
+## Decisions
+
+{% for decision in data.decisions %}
+{% if decision.text.strip() %}
+- {{ decision.text.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% if data.action_items %}
+## Action Items
+
+{% for item in data.action_items %}
+{% if item.text.strip() %}
+- [ ] {{ item.owner + ': ' if item.owner else '' }}{{ item.text.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% if data.requirements %}
+## Requirements
+
+{% for req in data.requirements %}
+{% if req.text.strip() %}
+- {{ req.text.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% if data.risks %}
+## Risks
+
+{% for risk in data.risks %}
+{% if risk.text.strip() %}
+- {{ risk.text.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% if data.open_questions %}
+## Open Questions
+
+{% for question in data.open_questions %}
+{% if question.text.strip() %}
+- {{ question.text.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% if data.important_dates %}
+## Important Dates
+
+{% for entry in data.important_dates %}
+{% if entry.text.strip() %}
+- {% if entry.date %}**{{ entry.date }}** - {% endif %}{{ entry.text.strip() }}
+{% endif %}
+{% endfor %}
+
+{% endif %}
+{% if transcript and transcript.segments %}
+## Full Transcript
+
+{% set ns = namespace(order=[], grouped={}) %}
+{% for seg in transcript.segments %}
+{% if seg.text.strip() %}
+{% if seg.speaker not in ns.grouped %}
+{% set _ = ns.order.append(seg.speaker) %}
+{% set _ = ns.grouped.update({seg.speaker: [seg.text.strip()]}) %}
+{% else %}
+{% set _ = ns.grouped[seg.speaker].append(seg.text.strip()) %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for speaker in ns.order %}
+### {{ speaker }}
+
+{% for text in ns.grouped[speaker] %}
+{{ text }}
+
+{% endfor %}
+{% endfor %}
+{% endif %}

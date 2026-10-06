@@ -22,6 +22,8 @@ _SCHEMA_DESCRIPTION = """{
   "summary": "string - 2 to 5 sentences",
   "decisions": [{"text": "string"}],
   "action_items": [{"text": "string", "owner": "string or null"}],
+  "requirements": [{"text": "string - a constraint or must-have stated in the meeting"}],
+  "risks": [{"text": "string - a risk, blocker, or concern raised"}],
   "open_questions": [{"text": "string"}],
   "important_dates": [{"text": "string", "date": "string or null"}],
   "discussion_topics": [{"title": "string", "points": ["string"]}]
@@ -40,6 +42,14 @@ Hard rules:
 - If a section has no information, return an empty array for it.
 - Distinguish confirmed information from uncertain discussion; do not promote
   speculation into a decision or action item.
+- A statement is a decision ONLY with explicit agreement ("agreed", "decided",
+  "let's go with"); otherwise keep it under discussion_topics.
+- Set an action-item owner ONLY when a person is explicitly assigned in the
+  transcript; otherwise use null.
+- Example: "Rahim will send the report by Friday" -> {{"text": "...", "owner": "Rahim"}}.
+- Example: "Someone should send the report" -> {{"text": "...", "owner": null}}.
+- "must support X" / "has to handle Y" constraints are requirements, not decisions.
+- Risks are blockers, concerns, "risk that...", "might break", or dependencies on others.
 - Preserve the language actually spoken. Do not translate Bangla into English.
   Write the summary in the meeting's dominant language.
 - Return only the JSON object, with no surrounding prose or code fences."""

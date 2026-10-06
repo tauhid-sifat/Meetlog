@@ -199,6 +199,22 @@ class DiscussionTopic:
 
 
 @dataclass
+class Requirement:
+    text: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class Risk:
+    text: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class StructuredMeetingData:
     """The AI's structured understanding of a meeting.
 
@@ -210,6 +226,8 @@ class StructuredMeetingData:
     summary: str = ""
     decisions: list[Decision] = field(default_factory=list)
     action_items: list[ActionItem] = field(default_factory=list)
+    requirements: list[Requirement] = field(default_factory=list)
+    risks: list[Risk] = field(default_factory=list)
     open_questions: list[OpenQuestion] = field(default_factory=list)
     important_dates: list[ImportantDate] = field(default_factory=list)
     discussion_topics: list[DiscussionTopic] = field(default_factory=list)
@@ -220,6 +238,8 @@ class StructuredMeetingData:
             "summary": self.summary,
             "decisions": [d.to_dict() for d in self.decisions],
             "action_items": [a.to_dict() for a in self.action_items],
+            "requirements": [r.to_dict() for r in self.requirements],
+            "risks": [r.to_dict() for r in self.risks],
             "open_questions": [q.to_dict() for q in self.open_questions],
             "important_dates": [d.to_dict() for d in self.important_dates],
             "discussion_topics": [t.to_dict() for t in self.discussion_topics],
@@ -236,6 +256,13 @@ class StructuredMeetingData:
             action_items=[
                 ActionItem(text=a.get("text", ""), owner=a.get("owner"))
                 for a in data.get("action_items", [])
+            ],
+            requirements=[
+                Requirement(text=r.get("text", ""))
+                for r in data.get("requirements", [])
+            ],
+            risks=[
+                Risk(text=r.get("text", "")) for r in data.get("risks", [])
             ],
             open_questions=[
                 OpenQuestion(text=q.get("text", ""))

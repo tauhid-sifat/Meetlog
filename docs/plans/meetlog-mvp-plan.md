@@ -24,8 +24,8 @@ Build a Windows desktop app that captures meeting audio (microphone + system aud
 | 2 — Mic + Windows system audio | Code complete and verified (mic + WASAPI loopback + sidecar integration) |
 | 3 — Transcript → Intelligence → Markdown | Code complete and live-validated |
 | 4 — Desktop UI | Code complete; UI builds, app launches, sidecar connects; live meeting flow pending a real API key |
-| 5 — Speaker intelligence | Not started |
-| 6 — Advanced meeting intelligence | Not started |
+| 5 — Speaker intelligence | Renaming end-to-end (sidecar map + UI panel); audio.wav retention deferred |
+| 6 — Advanced meeting intelligence | Code complete: requirements/risks extraction, custom Jinja templates, meeting comparison |
 
 ## Constraints, Assumptions, Risks, Unknowns
 
@@ -239,21 +239,23 @@ Python sidecar across processes.
 
 ## Phase 6: Advanced Meeting Intelligence
 
-**Scope:** `ai/intelligence/gemini.py`, `ai/render/markdown.py`
+**Scope:** `ai/intelligence/gemini.py`, `ai/render/markdown.py`, `ai/render/templates.py`, `ai/compare.py`, `templates/`
+
+**Status:** code complete (built peer-to-peer in three parallel workstreams: intelligence, rendering/comparison, robustness). Live-API precision/recall numbers still need a real-recording benchmark with an API key.
 
 **Steps:**
-1. Few-shot decision detection.
-2. Action items with owner identification.
-3. Requirement + risk extraction; topic grouping.
-4. Custom Markdown templates.
-5. Meeting comparison.
+1. Few-shot decision detection. ✅ (prompt rules + examples)
+2. Action items with owner identification. ✅ (owner-only-when-assigned rule)
+3. Requirement + risk extraction; topic grouping. ✅ (new schema fields + prompt rules)
+4. Custom Markdown templates. ✅ (`templates/meeting.md.j2` default, `templates/custom.md.j2` slim; `render_with_template`)
+5. Meeting comparison. ✅ (`ai/compare.py`: exact-text diff + deterministic Markdown)
 
 **Acceptance criteria:**
-- [ ] Decision extraction precision/recall improves over Phase 3 on the benchmark transcripts (numbers recorded).
-- [ ] Action items include an owner when stated; unstated owners are `null`.
-- [ ] A template at `templates/custom.md.j2` can be selected and is used for rendering.
-- [ ] Meeting comparison outputs differences in decisions/action items between two meetings.
-- [ ] Requirement and risk sections populate when present.
+- [~] Decision extraction precision/recall improves over Phase 3 on the benchmark transcripts. (rules in place; live numbers need real recordings + API key)
+- [x] Action items include an owner when stated; unstated owners are `null`. (rule + tests)
+- [x] A template at `templates/custom.md.j2` can be selected and is used for rendering.
+- [x] Meeting comparison outputs differences in decisions/action items between two meetings.
+- [x] Requirement and risk sections populate when present (and are omitted when empty).
 
 ---
 

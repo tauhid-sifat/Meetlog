@@ -94,6 +94,22 @@ def render_markdown(
                 lines.append(f"- [ ] {item.text.strip()}")
         lines.append("")
 
+    if data.requirements:
+        lines.append("## Requirements")
+        lines.append("")
+        for req in data.requirements:
+            if req.text.strip():
+                lines.append(f"- {req.text.strip()}")
+        lines.append("")
+
+    if data.risks:
+        lines.append("## Risks")
+        lines.append("")
+        for risk in data.risks:
+            if risk.text.strip():
+                lines.append(f"- {risk.text.strip()}")
+        lines.append("")
+
     if data.open_questions:
         lines.append("## Open Questions")
         lines.append("")
