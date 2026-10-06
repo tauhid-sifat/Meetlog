@@ -34,13 +34,19 @@ async fn main() {
     println!("capture spec: {spec:?} for {seconds}s");
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AudioChunk>();
-    let handles = match start(&spec, tx) {
+    let (err_tx, mut err_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let handles = match start(&spec, tx, err_tx) {
         Ok(h) => h,
         Err(e) => {
             eprintln!("failed to start capture: {e}");
             std::process::exit(1);
         }
     };
+    tokio::spawn(async move {
+        while let Some(message) = err_rx.recv().await {
+            eprintln!("stream error: {message}");
+        }
+    });
 
     let mut stats: HashMap<String, (usize, f64, f32)> = HashMap::new();
     let deadline = tokio::time::Instant::now() + Duration::from_secs_f32(seconds);

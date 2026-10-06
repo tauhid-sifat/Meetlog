@@ -54,12 +54,14 @@ fn effective_output_dir(app: &AppHandle) -> PathBuf {
 }
 
 fn begin_capture(
+    app: &AppHandle,
     state: &AppState,
     spec: &CaptureSpec,
     sender: UnboundedSender<String>,
 ) -> Result<(), String> {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AudioChunk>();
-    let handles = meetlog_audio::start(spec, tx).map_err(|e| e.to_string())?;
+    let (err_tx, mut err_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let handles = meetlog_audio::start(spec, tx, err_tx).map_err(|e| e.to_string())?;
     tauri::async_runtime::spawn(async move {
         while let Some(chunk) = rx.recv().await {
             if sender
@@ -68,6 +70,14 @@ fn begin_capture(
             {
                 break;
             }
+        }
+    });
+    // Surface capture-stream failures (unplugged device, profile switch,
+    // format change) in the UI instead of silently recording silence.
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(message) = err_rx.recv().await {
+            let _ = app_handle.emit("audio://error", message);
         }
     });
     *state.capture.lock().unwrap() = Some(handles);
@@ -89,7 +99,9 @@ async fn probe_capture(
     seconds: f32,
 ) -> Result<HashMap<String, ProbeResult>, String> {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AudioChunk>();
-    let handles = meetlog_audio::start(&spec, tx).map_err(|e| e.to_string())?;
+    let (err_tx, err_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    drop(err_rx); // probe reports levels, not stream errors
+    let handles = meetlog_audio::start(&spec, tx, err_tx).map_err(|e| e.to_string())?;
 
     let mut stats: HashMap<String, (usize, f64)> = HashMap::new();
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs_f32(seconds);
@@ -175,7 +187,7 @@ async fn start_meeting(
 
     // Start capture first: if no microphone is available we fail here, before
     // a sidecar session is opened that would otherwise be orphaned.
-    begin_capture(&state, &spec, sender.clone())?;
+    begin_capture(&app, &state, &spec, sender.clone())?;
 
     let mut config = serde_json::Map::new();
     config.insert("api_key".into(), api_key.into());

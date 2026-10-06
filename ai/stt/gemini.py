@@ -45,7 +45,7 @@ class GeminiLiveProvider(STTProvider):
         custom_vocabulary: list[str] | None = None,
         system_instruction: str | None = None,
         mode: str = TRANSCRIPTION_MODE,
-        diarization: bool = False,
+        diarization: bool = True,
         session_max_seconds: float = SESSION_MAX_SECONDS,
         response_modalities: list[str] | None = None,
         max_consecutive_errors: int = 5,

@@ -61,7 +61,13 @@ async fn main() {
 
     // --- capture loopback --------------------------------------------------
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<AudioChunk>();
-    let handles = system_audio::build_stream(tx).expect("start loopback");
+    let (err_tx, mut err_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let handles = system_audio::build_stream(tx, err_tx).expect("start loopback");
+    tokio::spawn(async move {
+        while let Some(message) = err_rx.recv().await {
+            eprintln!("stream error: {message}");
+        }
+    });
 
     let mut chunks = 0usize;
     let mut sum = 0.0f64;

@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState } from "react";
+import { api } from "../lib/api";
 import type { CaptureSpec, Settings } from "../types";
+
+interface ProbeLevels {
+  chunks: number;
+  rms: number;
+}
+
+function verdict(source: string, rms: number): string {
+  const what = source === "system" ? "System audio" : "Microphone";
+  if (rms > 0.02) return `${what} OK — picking up sound.`;
+  return source === "system"
+    ? "System audio silent — play something on this computer and check the output device."
+    : "Microphone silent — speak and check the selected device.";
+}
 
 interface Props {
   settings: Settings;
@@ -35,6 +49,27 @@ export function SetupView({ settings, devices, error, onStart }: Props) {
   }, [devices, settings.microphone, microphone]);
 
   const noDevices = devices.length === 0;
+  const [testing, setTesting] = useState(false);
+  const [levels, setLevels] = useState<Record<string, ProbeLevels> | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+
+  const testAudio = async () => {
+    if (noDevices || testing) return;
+    setTesting(true);
+    setTestError(null);
+    setLevels(null);
+    try {
+      const result = await api.probeCapture(
+        { mode, microphone, system_audio: mode === "online" },
+        4,
+      );
+      setLevels(result);
+    } catch (e) {
+      setTestError(String(e));
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const start = () => {
     if (noDevices) return;
@@ -124,6 +159,39 @@ export function SetupView({ settings, devices, error, onStart }: Props) {
       </section>
 
       {error && <div className="banner error" role="alert">Capture failed: {error} Check the microphone and try again.</div>}
+
+      <section className="panel">
+        <h2>Check levels before you start</h2>
+        <p className="hint">
+          Records 4 seconds from the selected sources. If system audio reads
+          silent while sound is playing, the meeting app is on a different
+          output device than the loopback target.
+        </p>
+        <div className="actions">
+          <button
+            className="secondary"
+            onClick={testAudio}
+            disabled={noDevices || testing}
+            aria-busy={testing}
+          >
+            {testing ? "Listening…" : "Test audio"}
+          </button>
+        </div>
+        {testError && <div className="banner error" role="alert">Audio test failed: {testError}</div>}
+        {levels && (
+          <ul className="levels">
+            {Object.entries(levels).map(([source, stats]) => (
+              <li key={source}>
+                <span className="mono">{source}</span>
+                <span className="meter" aria-hidden="true">
+                  <i style={{ width: `${Math.min(100, stats.rms * 500)}%` }} />
+                </span>
+                <span className="muted">{verdict(source, stats.rms)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="actions">
         <button

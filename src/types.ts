@@ -55,6 +55,6 @@ export const defaultSettings: Settings = {
   custom_vocabulary: [],
   system_audio: true,
   transcription_mode: "VERBATIM",
-  diarization: false,
+  diarization: true,
   model: null,
 };

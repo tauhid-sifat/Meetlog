@@ -63,15 +63,23 @@ impl Default for CaptureSpec {
 }
 
 /// Start capture streams described by `spec`, forwarding tagged chunks.
-pub fn start(spec: &CaptureSpec, sender: UnboundedSender<AudioChunk>) -> Result<CaptureHandles> {
+///
+/// Stream errors (device unplugged, format change, profile switch) are
+/// forwarded as human-readable messages on `err_tx` so the UI can surface
+/// them instead of silently capturing nothing.
+pub fn start(
+    spec: &CaptureSpec,
+    sender: UnboundedSender<AudioChunk>,
+    err_tx: UnboundedSender<String>,
+) -> Result<CaptureHandles> {
     let mut handles = CaptureHandles::empty();
 
-    let mic = microphone::build_stream(spec.microphone.as_deref(), sender.clone())?;
+    let mic = microphone::build_stream(spec.microphone.as_deref(), sender.clone(), err_tx.clone())?;
     handles.push(mic);
 
     let want_system = spec.system_audio || spec.mode == "online";
     if want_system {
-        let loopback = system_audio::build_stream(sender.clone())?;
+        let loopback = system_audio::build_stream(sender.clone(), err_tx.clone())?;
         handles.push(loopback);
     }
 

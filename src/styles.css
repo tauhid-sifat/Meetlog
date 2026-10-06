@@ -826,6 +826,49 @@ select:disabled {
   justify-content: flex-end;
 }
 
+/* audio level check */
+.levels {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.levels li {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.levels .muted {
+  grid-column: 2;
+}
+
+.meter {
+  display: block;
+  height: 8px;
+  background: var(--canvas);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  background: var(--success);
+  transition: width 0.2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter i {
+    transition: none;
+  }
+}
+
 /* chips */
 .chips {
   display: flex;

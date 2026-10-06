@@ -33,7 +33,7 @@ impl Default for Settings {
             custom_vocabulary: Vec::new(),
             system_audio: true,
             transcription_mode: "VERBATIM".to_string(),
-            diarization: false,
+            diarization: true,
             model: None,
         }
     }

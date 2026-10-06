@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, onSidecarMessage } from "../lib/api";
+import { api, onAudioError, onSidecarMessage } from "../lib/api";
 import type {
   CaptureSpec,
   MeetingStatus,
@@ -22,6 +22,9 @@ export function useMeeting() {
   const startedAt = useRef<number | null>(null);
 
   useEffect(() => {
+    const audioErrors = onAudioError((message) => {
+      setError(`Audio capture: ${message}`);
+    });
     const pending = onSidecarMessage((event) => {
       switch (event.type) {
         case "interim":
@@ -52,6 +55,7 @@ export function useMeeting() {
     });
     return () => {
       pending.then((unlisten) => unlisten());
+      audioErrors.then((unlisten) => unlisten());
     };
   }, []);
 

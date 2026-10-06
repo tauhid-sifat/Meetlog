@@ -12,8 +12,21 @@ use tokio::sync::mpsc::UnboundedSender;
 use super::resampler::{f32_to_i16_le, StreamResampler, TARGET_SAMPLE_RATE};
 use super::AudioChunk;
 
-fn err_fn(error: cpal::StreamError) {
-    log::error!("audio stream error: {error}");
+/// Build an error callback that logs and forwards a human-readable message.
+///
+/// Stream errors (device unplugged, format change, profile switch) otherwise
+/// die silently inside cpal while the meeting keeps running.
+fn make_err_fn(
+    source: &'static str,
+    device_label: String,
+    err_tx: UnboundedSender<String>,
+) -> impl FnMut(cpal::StreamError) + Send + 'static {
+    move |error: cpal::StreamError| {
+        log::error!("audio stream error on '{source}' ({device_label}): {error}");
+        let _ = err_tx.send(format!(
+            "{source} capture interrupted on '{device_label}': {error}. The audio device may have changed."
+        ));
+    }
 }
 
 /// Which device config to base the stream on. Loopback capture opens an input
@@ -30,6 +43,7 @@ pub fn build_capture_stream(
     device: &Device,
     source: &'static str,
     sender: UnboundedSender<AudioChunk>,
+    err_tx: UnboundedSender<String>,
     config_source: ConfigSource,
 ) -> Result<Stream> {
     let device_label = device.name().unwrap_or_default();
@@ -77,7 +91,7 @@ pub fn build_capture_stream(
                     let out = resampler.process(data);
                     emit(out);
                 },
-                err_fn,
+                make_err_fn(source, device_label.clone(), err_tx.clone()),
                 None,
             )
             .map_err(|e| {
@@ -91,7 +105,7 @@ pub fn build_capture_stream(
                     let out = resampler.process(&floats);
                     emit(out);
                 },
-                err_fn,
+                make_err_fn(source, device_label.clone(), err_tx.clone()),
                 None,
             )
             .map_err(|e| {
@@ -108,7 +122,7 @@ pub fn build_capture_stream(
                     let out = resampler.process(&floats);
                     emit(out);
                 },
-                err_fn,
+                make_err_fn(source, device_label.clone(), err_tx.clone()),
                 None,
             )
             .map_err(|e| {
@@ -126,3 +140,4 @@ pub fn build_capture_stream(
     })?;
     Ok(stream)
 }
+

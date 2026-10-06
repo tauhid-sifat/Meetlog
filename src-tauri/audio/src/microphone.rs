@@ -26,6 +26,7 @@ pub fn list_input_devices() -> Result<Vec<String>> {
 pub fn build_stream(
     device_name: Option<&str>,
     sender: UnboundedSender<AudioChunk>,
+    err_tx: UnboundedSender<String>,
 ) -> Result<Stream> {
     let host = cpal::default_host();
     let device = match device_name {
@@ -38,5 +39,5 @@ pub fn build_stream(
             .default_input_device()
             .ok_or_else(|| anyhow!("no default input device"))?,
     };
-    build_capture_stream(&device, "mic", sender, ConfigSource::Input)
+    build_capture_stream(&device, "mic", sender, err_tx, ConfigSource::Input)
 }

@@ -52,3 +52,7 @@ export function onSidecarReady(cb: () => void): Promise<UnlistenFn> {
 export function onSidecarError(cb: (message: string) => void): Promise<UnlistenFn> {
   return listen<string>("sidecar://error", (event) => cb(event.payload));
 }
+
+export function onAudioError(cb: (message: string) => void): Promise<UnlistenFn> {
+  return listen<string>("audio://error", (event) => cb(event.payload));
+}

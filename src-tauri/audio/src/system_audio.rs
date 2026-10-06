@@ -14,7 +14,10 @@ use super::capture::{build_capture_stream, ConfigSource};
 use super::AudioChunk;
 
 /// Build and start a loopback stream on the default output device.
-pub fn build_stream(sender: UnboundedSender<AudioChunk>) -> Result<Stream> {
+pub fn build_stream(
+    sender: UnboundedSender<AudioChunk>,
+    err_tx: UnboundedSender<String>,
+) -> Result<Stream> {
     let host = cpal::default_host();
     let device = host
         .default_output_device()
@@ -23,5 +26,5 @@ pub fn build_stream(sender: UnboundedSender<AudioChunk>) -> Result<Stream> {
         "system audio loopback on '{}'",
         device.name().unwrap_or_default()
     );
-    build_capture_stream(&device, "system", sender, ConfigSource::Output)
+    build_capture_stream(&device, "system", sender, err_tx, ConfigSource::Output)
 }

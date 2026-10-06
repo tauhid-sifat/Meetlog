@@ -24,7 +24,7 @@ Build a Windows desktop app that captures meeting audio (microphone + system aud
 | 2 — Mic + Windows system audio | Code complete and verified (mic + WASAPI loopback + sidecar integration) |
 | 3 — Transcript → Intelligence → Markdown | Code complete and live-validated |
 | 4 — Desktop UI | Code complete; UI builds, app launches, sidecar connects; live meeting flow pending a real API key |
-| 5 — Speaker intelligence | Renaming end-to-end (sidecar map + UI panel); audio.wav retention deferred |
+| 5 — Speaker intelligence | Renaming end-to-end; diarization on by default; mic/system fallback (You/Guest) when the model gives no labels; audio.wav retention deferred |
 | 6 — Advanced meeting intelligence | Code complete: requirements/risks extraction, custom Jinja templates, meeting comparison |
 
 ## Constraints, Assumptions, Risks, Unknowns
@@ -41,6 +41,8 @@ Build a Windows desktop app that captures meeting audio (microphone + system aud
 | Risk | Script normalization (English/Banglish rendered in Bengali script) | Investigate as a normalization issue, not an STT failure (see open issue). |
 | Risk | Echo when mixing mic + system audio | Recommend headphones; AEC in audio engine. |
 | Risk | Rust/WASAPI audio capture reliability | Moved earlier (Phase 2); it is a top technical risk. |
+| Risk | Bluetooth headset profile switch silences output when the mic opens | Capture is input-only shared-mode (never touches playback); mitigate with transparency: SetupView audio test, live device/error surfacing via `audio://error` events. |
+| Finding | Live test: user could not hear joinee while transcript captured them | Not caused by capture (shared-mode input streams cannot mute playback); likely headset profile switch or meeting app routing to a different endpoint than the loopback target. Mitigated with pre-meeting audio test + stream-error surfacing; needs user retest. |
 
 ## Workspace Setup
 
@@ -216,24 +218,28 @@ Cross-Validation
 **Scope:** `ai/main.py` (rename map), `src/components/LiveView.tsx`, `src/hooks/useMeeting.ts`
 
 **Status:** speaker renaming end-to-end. Diarization reuses the provider's
-`speaker_label` (Gemini flag, already plumbed); no pyannote — heavy native
-dependency that conflicts with the cloud-only MVP. `audio.wav` retention is
-deferred: it needs folder-path coordination between the Rust capturer and the
-Python sidecar across processes.
+`speaker_label` (Gemini flag, already plumbed) and now defaults ON everywhere
+(previously off, which is why live meetings showed everyone as Speaker 1); no
+pyannote — heavy native dependency that conflicts with the cloud-only MVP.
+When the model still returns no label, online meetings fall back to
+source-activity attribution ("You" for mic-dominant, "Guest" for
+system-dominant speech; rename-aware). `audio.wav` retention is deferred: it
+needs folder-path coordination between the Rust capturer and the Python
+sidecar across processes.
 
 **Steps:**
 1. Optional `audio.wav` capture (user-controlled). (deferred — see above)
-2. Post-meeting diarization (pyannote.audio or Gemini diarization). (Gemini flag only)
-3. Align diarization with transcript segments; assign speaker IDs. ✅ (labels flow through)
+2. Post-meeting diarization (pyannote.audio or Gemini diarization). ✅ (Gemini flag on by default)
+3. Align diarization with transcript segments; assign speaker IDs. ✅ (labels flow through; unlabeled online segments fall back to You/Guest)
 4. Speaker-renaming UI. ✅ (`rename_speaker` message + Speakers panel)
 5. Renamed speakers flow into `meeting.md`. ✅ (participants set at stop)
 
 **Acceptance criteria:**
 - [ ] With retention enabled, `audio.wav` is written to the meeting folder. (deferred)
-- [x] Diarization on a 2-speaker recording yields ≥2 distinct speaker labels. (via provider `speaker_label`; Gemini flag plumbed through)
-- [x] Transcript segments carry speaker IDs and the UI shows "Speaker 1"/"Speaker 2".
+- [x] Diarization on a 2-speaker recording yields ≥2 distinct speaker labels. (via provider `speaker_label`; Gemini flag on by default)
+- [x] Transcript segments carry speaker IDs and the UI shows labeled speakers (model labels, else You/Guest online).
 - [x] Renaming "Speaker 1" → "Tauhid" updates all segments and the rendered `meeting.md`.
-- [x] If diarization fails, pipeline falls back to a single "Speaker" label and still writes `meeting.md`. (normalize default)
+- [x] If diarization fails, pipeline falls back to source-activity labels (online) or a single "Speaker" label and still writes `meeting.md`.
 
 ---
 
@@ -263,7 +269,7 @@ Python sidecar across processes.
 
 **Scope:** all
 
-**Status:** final code review complete (peer agent, static). pytest 79 passed / 1 skipped, `cargo check` and `npm run build` green. Live and device-dependent items still need a real meeting.
+**Status:** final code review complete (peer agent, static). pytest 89 passed / 1 skipped, `cargo check` and `npm run build` green. Live and device-dependent items still need a real meeting.
 
 **Steps:**
 1. Run `pytest` (`ai/`), `cargo test` (`src-tauri/`), `npm test` (`src/`). ✅ (pytest green; `cargo test`/`npm test` have no test targets — verification is `cargo check` + `tsc` build, both green)

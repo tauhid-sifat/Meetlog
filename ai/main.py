@@ -35,9 +35,13 @@ import base64
 import json
 import logging
 import sys
+import time
 import uuid
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any
+
+import numpy as np
 
 from ai.config import GEMINI_LIVE_MODEL, SIDECAR_HOST, api_key
 from ai.models.transcript import (
@@ -134,6 +138,10 @@ class SidecarSession:
         self._audio_bytes = 0
         self._audio_by_source: dict[str, int] = {}
         self._speaker_names: dict[str, str] = {}
+        # Trailing per-source audio activity as (monotonic_time, source, rms),
+        # used to attribute segments the model leaves unlabeled. Bounded to
+        # roughly the last 3 minutes at 100 ms chunks from two sources.
+        self._activity: deque[tuple[float, str, float]] = deque(maxlen=3600)
 
     def stats(self) -> dict[str, Any]:
         return {
@@ -144,6 +152,60 @@ class SidecarSession:
 
     def _display_speaker(self, label: str | None) -> str:
         return resolve_speaker(label, self._speaker_names)
+
+    def _note_activity(self, source: str, pcm: bytes) -> None:
+        """Record audio energy per source for fallback speaker attribution."""
+        if len(pcm) < 2:
+            return
+        samples = np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
+        if samples.size == 0:
+            return
+        rms = float(np.sqrt(np.mean(samples * samples)))
+        self._activity.append((time.monotonic(), source, rms))
+
+    def _fallback_speaker(self) -> str | None:
+        """Attribute by dominant recent source when the model gives no label.
+
+        Online meetings capture two sources: the microphone (the local user)
+        and system audio (remote participants). When a finalized segment has
+        no model speaker label, the source that dominated the trailing audio
+        window decides: "You" for the mic, "Guest" for system audio. Returns
+        None when attribution is inconclusive so the caller keeps the default.
+        Only applies to online meetings; offline has a single source.
+        """
+        if self._metadata is None or self._metadata.mode != "online":
+            return None
+        cutoff = time.monotonic() - 5.0
+        mic = sys_total = 0.0
+        for ts, source, rms in self._activity:
+            if ts < cutoff:
+                continue
+            if source == "mic":
+                mic += rms
+            elif source == "system":
+                sys_total += rms
+        floor = 0.01
+        if mic < floor and sys_total < floor:
+            return None
+        if mic >= 1.5 * max(sys_total, 1e-6):
+            return "You"
+        if sys_total >= 1.5 * max(mic, 1e-6):
+            return "Guest"
+        return None
+
+    def _speaker_for(self, label: str | None) -> str:
+        """Resolve a speaker: model label wins, else source-activity fallback.
+
+        Both paths go through the rename mapping so a renamed fallback label
+        ("You" -> "Tauhid") stays renamed on later segments too.
+        """
+        cleaned = (label or "").strip() or None
+        if cleaned:
+            return self._display_speaker(cleaned)
+        fallback = self._fallback_speaker()
+        if fallback:
+            return self._display_speaker(fallback)
+        return "Speaker 1"
 
     def speakers(self) -> list[str]:
         """Display names in order of first appearance."""
@@ -226,6 +288,7 @@ class SidecarSession:
         self._audio_chunks = 0
         self._audio_bytes = 0
         self._audio_by_source = {}
+        self._activity.clear()
 
     async def start(self, config: dict[str, Any]) -> None:
         key = config.get("api_key") or api_key()
@@ -257,7 +320,7 @@ class SidecarSession:
             model=config.get("model") or GEMINI_LIVE_MODEL,
             language_codes=config.get("language_codes") or ["bn-BD", "en-US"],            custom_vocabulary=config.get("custom_vocabulary") or [],
             mode=config.get("transcription_mode", "VERBATIM"),
-            diarization=bool(config.get("diarization", False)),
+            diarization=bool(config.get("diarization", True)),
         )
         try:
             await self._provider.connect()
@@ -283,13 +346,13 @@ class SidecarSession:
                     "type": "interim",
                     "text": event.text,
                     "language": detect_language(event.text, event.language),
-                    "speaker": self._display_speaker(event.speaker),
+                    "speaker": self._speaker_for(event.speaker),
                 }
             )
         elif event.kind == "segment":
             segment = TranscriptSegment(
                 id=self._transcript.next_segment_id(),
-                speaker=self._display_speaker(event.speaker),
+                speaker=self._speaker_for(event.speaker),
                 start=event.start or 0.0,
                 end=event.end or 0.0,
                 text=event.text,
@@ -306,12 +369,13 @@ class SidecarSession:
         self._audio_chunks += 1
         self._audio_bytes += len(b64) * 3 // 4  # approximate decoded size
         self._audio_by_source[source] = self._audio_by_source.get(source, 0) + 1
-        if self._provider is None:
-            return
         try:
             pcm = base64.b64decode(b64)
         except (ValueError, TypeError) as exc:
             await self.send({"type": "error", "message": f"bad audio chunk: {exc}"})
+            return
+        self._note_activity(source, pcm)
+        if self._provider is None:
             return
         await self._provider.send_audio(pcm)
 
