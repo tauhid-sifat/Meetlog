@@ -173,18 +173,26 @@ async fn start_meeting(
         .sidecar_sender()
         .ok_or_else(|| "sidecar not running".to_string())?;
 
-    let start = serde_json::json!({
-        "type": "start",
-        "config": {
-            "api_key": api_key,
-            "title": title,
-            "mode": spec.mode,
-            "custom_vocabulary": settings.custom_vocabulary,
-            "transcription_mode": settings.transcription_mode,
-            "diarization": settings.diarization,
-            "model": settings.model,
+    let mut config = serde_json::Map::new();
+    config.insert("api_key".into(), api_key.into());
+    config.insert("title".into(), title.into());
+    config.insert("mode".into(), spec.mode.clone().into());
+    config.insert(
+        "custom_vocabulary".into(),
+        serde_json::to_value(&settings.custom_vocabulary).unwrap_or_default(),
+    );
+    config.insert(
+        "transcription_mode".into(),
+        settings.transcription_mode.clone().into(),
+    );
+    config.insert("diarization".into(), settings.diarization.into());
+    if let Some(model) = &settings.model {
+        if !model.is_empty() {
+            config.insert("model".into(), model.clone().into());
         }
-    });
+    }
+
+    let start = serde_json::json!({ "type": "start", "config": config });
     sender
         .send(start.to_string())
         .map_err(|_| "sidecar writer closed".to_string())?;

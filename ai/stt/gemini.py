@@ -56,7 +56,7 @@ class GeminiLiveProvider(STTProvider):
             raise ValueError("GeminiLiveProvider requires an API key")
 
         self._api_key = api_key
-        self._model = model
+        self._model = model or GEMINI_LIVE_MODEL
         self._language_codes = list(language_codes or [])
         self._language_hints = list(language_hints or [])
         self._custom_vocabulary = list(custom_vocabulary or [])
