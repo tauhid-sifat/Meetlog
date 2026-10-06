@@ -132,8 +132,7 @@ class SidecarSession:
         self._provider = GeminiLiveProvider(
             key,
             model=config.get("model") or GEMINI_LIVE_MODEL,
-            language_codes=config.get("language_codes") or [],
-            custom_vocabulary=config.get("custom_vocabulary") or [],
+            language_codes=config.get("language_codes") or ["bn-BD", "en-US"],            custom_vocabulary=config.get("custom_vocabulary") or [],
             mode=config.get("transcription_mode", "VERBATIM"),
             diarization=bool(config.get("diarization", False)),
         )

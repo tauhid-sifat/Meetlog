@@ -57,7 +57,9 @@ class GeminiLiveProvider(STTProvider):
 
         self._api_key = api_key
         self._model = model or GEMINI_LIVE_MODEL
-        self._language_codes = list(language_codes or [])
+        self._language_codes = (
+            list(language_codes) if language_codes else ["bn-BD", "en-US"]
+        )
         self._language_hints = list(language_hints or [])
         self._custom_vocabulary = list(custom_vocabulary or [])
         self._system_instruction = system_instruction

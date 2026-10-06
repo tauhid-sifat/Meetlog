@@ -9,6 +9,12 @@ def _provider(**kwargs) -> GeminiLiveProvider:
     return GeminiLiveProvider("dummy-key", **kwargs)
 
 
+def test_default_language_codes_are_bangla_english():
+    provider = _provider()
+    config = provider._build_config()
+    assert config.input_audio_transcription.language_codes == ["bn-BD", "en-US"]
+
+
 def test_language_hints_wrapped_in_object():
     provider = _provider(language_hints=["en-US"])
     config = provider._build_config()

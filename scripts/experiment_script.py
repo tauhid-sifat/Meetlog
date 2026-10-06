@@ -35,11 +35,11 @@ VOCAB = ["Thursday", "finalize", "basically", "existing", "workflow", "integrate
 
 VARIANTS: list[tuple[str, dict]] = [
     ("baseline", {}),
+    ("lang-bn-en", {"language_codes": ["bn-BD", "en-US"]}),
+    ("lang-bn-en-hint", {"language_codes": ["bn-BD", "en-US"], "language_hints": ["bn-BD", "en-US"]}),
     ("sys-instr", {"system_instruction": INSTRUCTION}),
     ("vocab", {"vocabulary": VOCAB}),
-    ("sys+vocab", {"system_instruction": INSTRUCTION, "vocabulary": VOCAB}),
-    ("hint-en", {"language_hints": ["en-US"]}),
-    ("hint+vocab", {"language_hints": ["en-US"], "vocabulary": VOCAB}),
+    ("lang+vocab", {"language_codes": ["bn-BD", "en-US"], "vocabulary": VOCAB}),
 ]
 
 
