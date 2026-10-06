@@ -59,6 +59,35 @@ The spec (section 10) expects Latin script for code-switched English. Possible
 mitigations: `custom_vocabulary` / `language_hints` per term, or a
 post-processing transliteration pass. Tracked as an open issue.
 
+### Real-meeting finding: wrong-language hallucination
+
+A real Bangla+English meeting produced segments in scripts the user never
+spoke: Hindi (Devanagari, e.g. `कैसे हो, ठीक हो?`, `वाओ।`) and Japanese
+(hiragana, e.g. `おまけ、おまけ。`). This is distinct from the TTS script
+normalization above — the model picked the wrong language, not just the wrong
+script for the right language.
+
+What we know:
+- `language_codes=["bn-BD", "en-US"]` is sent on every session (provider
+  default), but the Live API treats it as a recognition hint, not a hard
+  output filter. The TTS ablation confirms it does not change script choice
+  on clear audio.
+- Short, low-confidence fragments (interjections like "wow") are the most
+  likely to be misidentified.
+
+What this fix does:
+- `detect_language` now truthfully identifies Devanagari → `hindi`,
+  hiragana/katakana → `japanese`, CJK → `chinese`, instead of mislabeling
+  them `unknown`. The raw transcript is preserved untouched; only the label
+  is corrected, so suspect segments are visible in the UI and `transcript.json`.
+- No silent filtering or auto-correction: mapping Hindi back to Bangla would
+  be wrong (`कैसे हो` is Hindi, not a transliteration of `কেমন আছো`).
+
+Still open: preventing the hallucination itself. Options if it persists on
+real speech are a stronger provider-level constraint (if the API gains one),
+a short-audio confidence gate, or revisiting the STT provider choice. That
+decision needs a real-recording benchmark first.
+
 ### Terminology / script preservation
 
 Run with `scripts/validate_terminology.py` (TTS via `gemini-3.8-flash-tts`).

@@ -51,21 +51,48 @@ from ai.storage.transcript import save_meeting
 log = logging.getLogger("meetlog.sidecar")
 
 _BENGALI = range(0x0980, 0x0A00)
+_DEVANAGARI = range(0x0900, 0x0980)
+_HIRAGANA = range(0x3040, 0x3100)
+_KATAKANA = range(0x30A0, 0x3100)
+_CJK = range(0x4E00, 0xA000)
+
+
+def _scripts_present(text: str) -> set[str]:
+    """Set of scripts detected in text: bengali, hindi, english, japanese, chinese."""
+    scripts: set[str] = set()
+    for ch in text:
+        o = ord(ch)
+        if o in _BENGALI:
+            scripts.add("bangla")
+        elif o in _DEVANAGARI:
+            scripts.add("hindi")
+        elif o in _HIRAGANA or o in _KATAKANA:
+            scripts.add("japanese")
+        elif o in _CJK:
+            scripts.add("chinese")
+        elif "a" <= ch.lower() <= "z":
+            scripts.add("english")
+    return scripts
 
 
 def detect_language(text: str, code: str | None) -> str:
-    """Coarse language label: english | bangla | mixed | <code> | unknown."""
-    has_bengali = any(ord(ch) in _BENGALI for ch in text)
-    has_latin = any("a" <= ch.lower() <= "z" for ch in text)
-    if has_bengali and has_latin:
-        return "mixed"
-    if has_bengali:
-        return "bangla"
-    if has_latin:
-        return "english"
-    if code:
-        return code.lower()
-    return "unknown"
+    """Coarse language label.
+
+    Single-script text returns that script's language (bangla, hindi,
+    english, japanese, chinese). Japanese kanji (CJK block) alongside kana
+    still counts as japanese. Anything genuinely mixed returns "mixed".
+    Text with no recognizable script falls back to the provider's language
+    code, or "unknown".
+    """
+    scripts = _scripts_present(text)
+    if not scripts:
+        return code.lower() if code else "unknown"
+    if len(scripts) == 1:
+        return next(iter(scripts))
+    if scripts <= {"japanese", "chinese"}:
+        # Kanji inside Japanese text is still Japanese.
+        return "japanese"
+    return "mixed"
 
 
 def normalize_speaker(label: str | None) -> str:

@@ -33,9 +33,11 @@ CLIPS: list[tuple[str, Path, str]] = [
 
 VOCAB = ["Thursday", "finalize", "basically", "existing", "workflow", "integrate"]
 
+# Note: the provider defaults to language_codes=["bn-BD", "en-US"], so the
+# baseline below is already constrained. There is no unconstrained variant on
+# purpose: unconstrained output is out of scope for this product.
 VARIANTS: list[tuple[str, dict]] = [
     ("baseline", {}),
-    ("lang-bn-en", {"language_codes": ["bn-BD", "en-US"]}),
     ("lang-bn-en-hint", {"language_codes": ["bn-BD", "en-US"], "language_hints": ["bn-BD", "en-US"]}),
     ("sys-instr", {"system_instruction": INSTRUCTION}),
     ("vocab", {"vocabulary": VOCAB}),
