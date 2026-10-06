@@ -205,6 +205,28 @@ class SidecarSession:
             self._writer.write(data)
             await self._writer.drain()
 
+    async def _reset_for_new_meeting(self) -> None:
+        """Clear all previous-meeting state so back-to-back meetings in one
+        app session never share transcript, speakers, provider, or flags."""
+        if self._forwarder is not None:
+            self._forwarder.cancel()
+            try:
+                await self._forwarder
+            except asyncio.CancelledError:
+                pass
+            self._forwarder = None
+        if self._provider is not None:
+            await self._provider.disconnect()
+            self._provider = None
+        self._transcript = Transcript(meeting_id=uuid.uuid4().hex[:12])
+        self._speaker_names = {}
+        self._metadata = None
+        self._started_at = None
+        self._stopping = False
+        self._audio_chunks = 0
+        self._audio_bytes = 0
+        self._audio_by_source = {}
+
     async def start(self, config: dict[str, Any]) -> None:
         key = config.get("api_key") or api_key()
         if not key:
@@ -212,6 +234,8 @@ class SidecarSession:
                 {"type": "error", "message": "No Gemini API key configured"}
             )
             return
+
+        await self._reset_for_new_meeting()
 
         now = datetime.now(timezone.utc)
         self._started_at = now
@@ -317,10 +341,11 @@ class SidecarSession:
             self._forwarder = None
 
         if self._metadata is not None:
-            self._metadata.ended_at = None
+            now = datetime.now(timezone.utc)
+            self._metadata.ended_at = now.isoformat()
             if self._started_at is not None:
                 self._metadata.duration_seconds = (
-                    datetime.now(timezone.utc) - self._started_at
+                    now - self._started_at
                 ).total_seconds()
             self._metadata.participants = self.speakers()
 
@@ -328,22 +353,27 @@ class SidecarSession:
         markdown_path = None
         try:
             if self._metadata is not None:
-                save_meeting(self._metadata, self._transcript)
+                folder = save_meeting(self._metadata, self._transcript)
             key = config.get("api_key") or api_key()
             if (
                 self._metadata is not None
+                and folder is not None
                 and key
                 and config.get("generate_markdown", True)
                 and self._transcript.segments
             ):
-                _, folder, _ = await generate_meeting(
-                    self._transcript, self._metadata, api_key=key
-                )
-                markdown_path = str(folder / "meeting.md")
-            elif self._metadata is not None:
-                folder = save_meeting(self._metadata, self._transcript)
+                try:
+                    _, folder, _ = await generate_meeting(
+                        self._transcript, self._metadata, api_key=key
+                    )
+                    markdown_path = str(folder / "meeting.md")
+                except Exception as exc:  # noqa: BLE001 - keep the raw-save folder
+                    log.exception("meeting intelligence failed")
+                    await self.send(
+                        {"type": "error", "message": f"generation failed: {exc}"}
+                    )
         except Exception as exc:  # noqa: BLE001 - report, never crash the sidecar
-            log.exception("meeting generation failed")
+            log.exception("meeting save failed")
             await self.send(
                 {"type": "error", "message": f"generation failed: {exc}"}
             )

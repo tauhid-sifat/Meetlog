@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CaptureSpec, Settings } from "../types";
 
 interface Props {
@@ -16,6 +16,14 @@ export function SetupView({ settings, devices, error, onStart }: Props) {
     settings.microphone ?? (devices[0] ?? null),
   );
   const [title, setTitle] = useState("Meeting");
+  const modeTouched = useRef(false);
+
+  // Settings load async; sync mode once until the user picks explicitly.
+  useEffect(() => {
+    if (!modeTouched.current) {
+      setMode(settings.system_audio ? "online" : "offline");
+    }
+  }, [settings.system_audio]);
 
   useEffect(() => {
     if ((microphone === null || microphone === "") && devices.length > 0) {
@@ -49,7 +57,10 @@ export function SetupView({ settings, devices, error, onStart }: Props) {
           role="radio"
           aria-checked={mode === "online"}
           className={`mode-card ${mode === "online" ? "selected" : ""}`}
-          onClick={() => setMode("online")}
+          onClick={() => {
+            modeTouched.current = true;
+            setMode("online");
+          }}
         >
           <span className="pick" aria-hidden="true" />
           <span className="mode-title">Online Meeting</span>
@@ -60,7 +71,10 @@ export function SetupView({ settings, devices, error, onStart }: Props) {
           role="radio"
           aria-checked={mode === "offline"}
           className={`mode-card ${mode === "offline" ? "selected" : ""}`}
-          onClick={() => setMode("offline")}
+          onClick={() => {
+            modeTouched.current = true;
+            setMode("offline");
+          }}
         >
           <span className="pick" aria-hidden="true" />
           <span className="mode-title">In-Person Meeting</span>
@@ -84,6 +98,8 @@ export function SetupView({ settings, devices, error, onStart }: Props) {
           <select
             id="meeting-mic"
             value={microphone ?? ""}
+            disabled={noDevices}
+            aria-describedby={noDevices ? "mic-empty-hint" : undefined}
             onChange={(e) => setMicrophone(e.currentTarget.value || null)}
           >
             {noDevices && <option value="">No input devices found</option>}
@@ -101,7 +117,7 @@ export function SetupView({ settings, devices, error, onStart }: Props) {
           </p>
         )}
         {noDevices && (
-          <p className="hint">
+          <p className="hint" id="mic-empty-hint">
             No microphone detected. Plug in a device, then reopen this view. Starting is paused until input is available so you never record silence.
           </p>
         )}
@@ -110,7 +126,12 @@ export function SetupView({ settings, devices, error, onStart }: Props) {
       {error && <div className="banner error" role="alert">Capture failed: {error} Check the microphone and try again.</div>}
 
       <div className="actions">
-        <button className="primary" onClick={start} disabled={noDevices}>
+        <button
+          className="primary"
+          onClick={start}
+          disabled={noDevices}
+          aria-disabled={noDevices}
+        >
           {noDevices ? "No microphone — Start unavailable" : "Start Meeting"}
         </button>
         <span className="muted">{mode === "online" ? "Mic + system audio" : "Mic only"} · Transcript auto-saves</span>

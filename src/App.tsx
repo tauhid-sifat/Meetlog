@@ -138,8 +138,8 @@ function App() {
             Settings
           </button>
         </nav>
-        <div className="status mono">
-          <span className={`dot ${sidecarReady ? "on" : ""}`} />
+        <div className="status mono" role="status">
+          <span className={`dot ${sidecarReady ? "on" : ""}`} aria-hidden="true" />
           {sidecarReady ? "AI engine ready" : "AI engine starting — transcription waits"}
         </div>
       </aside>

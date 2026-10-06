@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Settings } from "../types";
 
 interface Props {
@@ -25,6 +25,11 @@ export function SettingsView({
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(
     null,
   );
+
+  // Parent loads settings async; keep draft in sync until user edits are saved.
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
 
   const save = async () => {
     setSaving(true);
@@ -75,15 +80,19 @@ export function SettingsView({
       </header>
 
       <section className="panel">
-        <h2>Gemini API key</h2>
-        <p className="hint">
+        <h2 id="api-key-heading">Gemini API key</h2>
+        <p className="hint" id="api-key-hint">
           Stored in the Windows Credential Manager, never in plaintext.
           {hasApiKey ? " A key is currently set." : " No key set yet."}
         </p>
         <div className="field row-inline">
           <input
+            id="api-key-input"
             type="password"
+            autoComplete="off"
             value={apiKey}
+            aria-labelledby="api-key-heading"
+            aria-describedby="api-key-hint"
             placeholder={hasApiKey ? "Replace key (leave blank to keep)" : "Paste API key"}
             onChange={(e) => setApiKey(e.currentTarget.value)}
           />
@@ -98,8 +107,9 @@ export function SettingsView({
       <section className="panel">
         <h2>Audio</h2>
         <div className="field">
-          <label>Default microphone</label>
+          <label htmlFor="settings-mic">Default microphone</label>
           <select
+            id="settings-mic"
             value={draft.microphone ?? ""}
             onChange={(e) => setDraft({ ...draft, microphone: e.currentTarget.value || null })}
           >
@@ -128,8 +138,9 @@ export function SettingsView({
           Enable speaker diarization
         </label>
         <div className="field">
-          <label>Transcription mode</label>
+          <label htmlFor="settings-mode">Transcription mode</label>
           <select
+            id="settings-mode"
             value={draft.transcription_mode}
             onChange={(e) => setDraft({ ...draft, transcription_mode: e.currentTarget.value })}
           >
@@ -140,29 +151,42 @@ export function SettingsView({
       </section>
 
       <section className="panel">
-        <h2>Custom vocabulary</h2>
-        <p className="hint">
+        <h2 id="vocab-heading">Custom vocabulary</h2>
+        <p className="hint" id="vocab-hint">
           Product names, people, and technical terms. Improves accuracy and helps
           keep English terms in Latin script.
         </p>
-        <div className="chips">
-          {draft.custom_vocabulary.map((term) => (
-            <span className="chip" key={term}>
-              {term}
-              <button className="chip-x" onClick={() => removeTerm(term)}>
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
+        {draft.custom_vocabulary.length > 0 ? (
+          <div className="chips" aria-labelledby="vocab-heading">
+            {draft.custom_vocabulary.map((term) => (
+              <span className="chip" key={term} title={term}>
+                {term}
+                <button
+                  className="chip-x"
+                  onClick={() => removeTerm(term)}
+                  aria-label={`Remove ${term}`}
+                  title={`Remove ${term}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="hint">No terms yet — add names and product terms below.</p>
+        )}
         <div className="field row-inline">
           <input
+            id="vocab-input"
             value={vocabInput}
+            aria-label="Add vocabulary term"
+            aria-describedby="vocab-hint"
             placeholder="Add term"
+            maxLength={60}
             onChange={(e) => setVocabInput(e.currentTarget.value)}
             onKeyDown={(e) => e.key === "Enter" && addTerm()}
           />
-          <button className="secondary" onClick={addTerm}>
+          <button className="secondary" onClick={addTerm} disabled={!vocabInput.trim()}>
             Add
           </button>
         </div>
@@ -171,24 +195,28 @@ export function SettingsView({
       <section className="panel">
         <h2>Output</h2>
         <div className="field">
-          <label>Meetings folder</label>
+          <label htmlFor="settings-output">Meetings folder</label>
           <input
+            id="settings-output"
             value={draft.output_dir ?? ""}
-            placeholder={outputDir}
+            placeholder={outputDir || "Default location"}
             onChange={(e) => setDraft({ ...draft, output_dir: e.currentTarget.value || null })}
           />
         </div>
       </section>
 
       {status && (
-        <div className={`banner ${status.kind === "ok" ? "success" : "error"}`}>
+        <div
+          className={`banner ${status.kind === "ok" ? "success" : "error"}`}
+          role={status.kind === "ok" ? "status" : "alert"}
+        >
           {status.text}
         </div>
       )}
 
       <div className="actions">
-        <button className="primary" onClick={save} disabled={saving}>
-          {saving ? "Saving..." : "Save Settings"}
+        <button className="primary" onClick={save} disabled={saving} aria-busy={saving}>
+          {saving ? "Saving…" : "Save Settings"}
         </button>
       </div>
     </div>

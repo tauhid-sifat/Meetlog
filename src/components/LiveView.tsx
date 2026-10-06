@@ -33,10 +33,13 @@ function SpeakerRow({
   const changed = draft.trim() !== "" && draft.trim() !== name;
   return (
     <div className="speaker-row">
-      <span className="speaker-id mono">{name}</span>
+      <span className="speaker-id mono" title={name}>{name}</span>
       <input
         value={draft}
         aria-label={`Rename ${name}`}
+        placeholder="Display name"
+        maxLength={40}
+        autoComplete="off"
         onChange={(e) => setDraft(e.currentTarget.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && changed) onRename(name, draft.trim());
@@ -120,7 +123,7 @@ export function LiveView({
       {error && <div className="banner error" role="alert">Transcription interrupted: {error} Your captured segments above are safe. Resume or stop to save.</div>}
 
       {result && (
-        <div className="banner success">
+        <div className="banner success" role="status">
           Meeting saved.
           {result.markdownPath && (
             <>
@@ -154,7 +157,12 @@ export function LiveView({
         </section>
       )}
 
-      <div className="transcript" ref={scrollRef} aria-live="polite">
+      <div
+        className="transcript"
+        ref={scrollRef}
+        aria-live="polite"
+        aria-busy={starting || stopping}
+      >
         {segments.length === 0 && !interim && (
           <div className="empty">
             <strong>{live ? "Listening — speak to test capture" : starting ? "Connecting audio capture…" : "No transcript yet"}</strong>
@@ -172,7 +180,7 @@ export function LiveView({
             <div className="gutter mono">{formatDuration(segment.start)}</div>
             <div className="content">
               <div className="speaker">
-                {segment.speaker}
+                <span className="speaker-name" title={segment.speaker}>{segment.speaker}</span>
                 <span className="lang mono">{segment.language}</span>
               </div>
               <div className="text">{segment.text}</div>
@@ -181,7 +189,7 @@ export function LiveView({
         ))}
         {interim && (
           <div className="row interim">
-            <div className="gutter mono" />
+            <div className="gutter mono" aria-hidden="true" />
             <div className="content">
               <div className="interim-tag">Hearing</div>
               <div className="text">{interim}</div>
@@ -209,8 +217,13 @@ export function LiveView({
             Resume capture
           </button>
         )}
-        <button className={`danger ${confirmStop ? "armed" : ""}`} onClick={handleStop} disabled={!live || stopping}>
-          {stopping ? "Saving…" : confirmStop ? "Confirm Stop" : "Stop Meeting"}
+        <button
+          className={`danger ${confirmStop ? "armed" : ""}`}
+          onClick={handleStop}
+          disabled={!live || stopping}
+          aria-busy={stopping}
+        >
+          {stopping ? "Saving…" : starting ? "Connecting…" : confirmStop ? "Confirm Stop" : "Stop Meeting"}
         </button>
         {confirmStop && (
           <button className="ghost" onClick={() => setConfirmStop(false)}>

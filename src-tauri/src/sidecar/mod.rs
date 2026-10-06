@@ -141,11 +141,18 @@ pub async fn start(app: AppHandle) -> Result<Sidecar> {
     });
 
     // Reader task: forwards every line to the frontend as an event.
+    // If the stream ends, the sidecar died or closed the connection: say so
+    // loudly instead of leaving the UI stuck in a live state.
+    let app_dead = app.clone();
     tokio::spawn(async move {
         let mut lines = BufReader::new(read_half).lines();
         while let Ok(Some(line)) = lines.next_line().await {
             let _ = app.emit(EVENT_NAME, line);
         }
+        let _ = app_dead.emit(
+            "sidecar://error",
+            "AI engine disconnected unexpectedly. Stop the meeting to keep what was captured, then start a new one.",
+        );
     });
 
     Ok(Sidecar { child, tx })

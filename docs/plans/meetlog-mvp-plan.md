@@ -263,19 +263,23 @@ Python sidecar across processes.
 
 **Scope:** all
 
+**Status:** final code review complete (peer agent, static). pytest 79 passed / 1 skipped, `cargo check` and `npm run build` green. Live and device-dependent items still need a real meeting.
+
 **Steps:**
-1. Run `pytest` (`ai/`), `cargo test` (`src-tauri/`), `npm test` (`src/`).
-2. End-to-end: Online meeting, speak 2 min, stop, verify `meeting.md`.
-3. Reconcile every acceptance criterion above.
-4. One final overall code review.
-5. Error-path tests.
+1. Run `pytest` (`ai/`), `cargo test` (`src-tauri/`), `npm test` (`src/`). ✅ (pytest green; `cargo test`/`npm test` have no test targets — verification is `cargo check` + `tsc` build, both green)
+2. End-to-end: Online meeting, speak 2 min, stop, verify `meeting.md`. (needs live run)
+3. Reconcile every acceptance criterion above. ✅ (Agent R checklist; NEEDS-LIVE items listed below)
+4. One final overall code review. ✅ (found and fixed B1 session-reset blocker, I1/I2/I7/I8/I10, I3 stop fallback)
+5. Error-path tests. ✅ (`tests/test_error_paths.py`, `tests/test_session_lifecycle.py`)
 
 **Acceptance criteria:**
-- [ ] `pytest`, `cargo test`, `npm test` all pass.
-- [ ] E2E: start Online meeting, speak 2 min, stop → `meeting.md` exists with all non-empty sections correct.
-- [ ] Every acceptance criterion in Phases 0-6 is checked and marked pass/fail.
-- [ ] One final code review completed across the codebase.
-- [ ] Error handling verified for: mic unavailable, system audio unavailable, API failure, network disconnect, quota exceeded.
+- [x] `pytest`, `cargo test`, `npm test` all pass. (pytest 79/1 skip; no Rust/TS test targets exist)
+- [ ] E2E: start Online meeting, speak 2 min, stop → `meeting.md` exists with all non-empty sections correct. (needs live run)
+- [x] Every acceptance criterion in Phases 0-6 is checked and marked pass/fail. (review checklist)
+- [x] One final code review completed across the codebase.
+- [~] Error handling verified for: mic unavailable, system audio unavailable, API failure, network disconnect, quota exceeded. (offline paths covered; live + device-unplug need hardware)
+
+**Deferred from review (explicit):** optimistic-rename rollback on sidecar rejection (unreachable via UI — renames originate from the displayed list); device-disconnect surfacing to UI (needs audio-thread→UI event plumbing; unplug test still manual); dangling-header/chronology/compare-case-sensitivity nits.
 
 ---
 

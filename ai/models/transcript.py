@@ -300,4 +300,16 @@ class MeetingMetadata:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "MeetingMetadata":
-        return cls(**data)
+        # Unknown keys (e.g. the "structured" snapshot save_meeting embeds
+        # in metadata.json) are ignored so our own files always load.
+        return cls(
+            meeting_id=data.get("meeting_id", ""),
+            title=data.get("title", ""),
+            date=data.get("date", ""),
+            duration_seconds=float(data.get("duration_seconds", 0.0)),
+            mode=data.get("mode", "offline"),
+            participants=list(data.get("participants", [])),
+            provider=data.get("provider", ""),
+            model=data.get("model", ""),
+            audio_retained=bool(data.get("audio_retained", False)),
+        )

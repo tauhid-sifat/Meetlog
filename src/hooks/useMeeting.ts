@@ -87,6 +87,19 @@ export function useMeeting() {
     setStatus("stopping");
     try {
       await api.stopMeeting();
+      // If the engine never answers (crashed mid-stop), don't hang forever:
+      // the raw transcript was already saved to disk by the sidecar.
+      window.setTimeout(() => {
+        setStatus((current) => {
+          if (current === "stopping") {
+            setError(
+              "Stop timed out waiting for the engine. Check the Meetings folder — the raw transcript is saved there.",
+            );
+            return "idle";
+          }
+          return current;
+        });
+      }, 20000);
     } catch (e) {
       setError(String(e));
       setStatus("idle");

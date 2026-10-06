@@ -93,6 +93,13 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.16);
 }
 
+input:disabled,
+select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f1f4f8;
+}
+
 .mono {
   font-family: var(--mono);
   font-size: 12px;
@@ -236,6 +243,7 @@ select:focus {
 .view-head p {
   margin: 0;
   max-width: 68ch;
+  overflow-wrap: break-word;
 }
 
 .row-between {
@@ -243,6 +251,11 @@ select:focus {
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
+  flex-wrap: wrap;
+}
+
+.row-between > div {
+  min-width: 0;
 }
 
 /* panels */
@@ -295,6 +308,7 @@ select:focus {
   line-height: 1.5;
   margin: 8px 0 0;
   max-width: 68ch;
+  overflow-wrap: break-word;
 }
 
 /* speaker renaming */
@@ -389,6 +403,11 @@ select:focus {
 .ghost:hover {
   background: var(--canvas);
   color: var(--text);
+}
+
+.ghost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .danger {
@@ -509,6 +528,7 @@ select:focus {
   max-width: 760px;
   line-height: 1.5;
   border: 1px solid;
+  overflow-wrap: break-word;
 }
 
 .banner.error {
@@ -545,6 +565,11 @@ select:focus {
   gap: 14px;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.live-head > div {
+  min-width: 0;
 }
 
 .rec {
@@ -676,6 +701,10 @@ select:focus {
   border-bottom: none;
 }
 
+.row .content {
+  min-width: 0;
+}
+
 .gutter {
   color: var(--muted);
   padding-top: 3px;
@@ -689,6 +718,12 @@ select:focus {
   align-items: center;
   margin-bottom: 3px;
   letter-spacing: -0.005em;
+  flex-wrap: wrap;
+}
+
+.speaker-name {
+  overflow-wrap: break-word;
+  min-width: 0;
 }
 
 .lang {
@@ -704,6 +739,7 @@ select:focus {
 .text {
   line-height: 1.65;
   max-width: 72ch;
+  overflow-wrap: break-word;
 }
 
 .row.interim {
@@ -768,6 +804,17 @@ select:focus {
 .meeting-title {
   font-weight: 700;
   letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+}
+
+.meeting-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.meeting-date,
+.output-dir {
+  overflow-wrap: break-word;
 }
 
 .meeting-actions {
@@ -775,6 +822,8 @@ select:focus {
   gap: 8px;
   align-items: center;
   flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* chips */
@@ -794,28 +843,27 @@ select:focus {
   border-radius: 20px;
   padding: 4px 6px 4px 10px;
   font-size: 12px;
+  max-width: 100%;
+  overflow-wrap: break-word;
 }
 
 .chip-x {
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  color: var(--muted);
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
   padding: 0;
+  color: var(--muted);
   font-size: 13px;
   line-height: 1;
+  flex: none;
 }
 
 .chip-x:hover {
   color: var(--live);
   border-color: var(--live);
-}
-
-.setup-grid {
-  display: grid;
-  gap: 0;
 }
 
 @media (max-width: 860px) {
@@ -867,5 +915,21 @@ select:focus {
 
   .row {
     grid-template-columns: 52px 1fr;
+  }
+
+  .meeting-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .meeting-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .level.live i,
+  .dot.on {
+    animation: none;
   }
 }

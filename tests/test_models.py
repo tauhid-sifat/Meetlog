@@ -37,6 +37,20 @@ def test_structured_round_trip():
     assert restored.to_dict() == data.to_dict()
 
 
+def test_meeting_metadata_from_dict_ignores_unknown_keys():
+    from ai.models.transcript import MeetingMetadata
+
+    data = {
+        "meeting_id": "m1",
+        "title": "T",
+        "date": "2026-10-06",
+        "structured": {"summary": "should be ignored, not crash"},
+    }
+    metadata = MeetingMetadata.from_dict(data)
+    assert metadata.meeting_id == "m1"
+    assert metadata.title == "T"
+
+
 def test_next_segment_id_increments():
     transcript = Transcript(meeting_id="m1")
     assert transcript.next_segment_id() == "segment_001"

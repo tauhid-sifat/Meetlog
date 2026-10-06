@@ -173,6 +173,10 @@ async fn start_meeting(
         .sidecar_sender()
         .ok_or_else(|| "sidecar not running".to_string())?;
 
+    // Start capture first: if no microphone is available we fail here, before
+    // a sidecar session is opened that would otherwise be orphaned.
+    begin_capture(&state, &spec, sender.clone())?;
+
     let mut config = serde_json::Map::new();
     config.insert("api_key".into(), api_key.into());
     config.insert("title".into(), title.into());
@@ -196,8 +200,7 @@ async fn start_meeting(
     sender
         .send(start.to_string())
         .map_err(|_| "sidecar writer closed".to_string())?;
-
-    begin_capture(&state, &spec, sender)
+    Ok(())
 }
 
 #[tauri::command]
