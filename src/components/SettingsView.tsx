@@ -71,6 +71,7 @@ export function SettingsView({
     <div className="settings">
       <header className="view-head">
         <h1>Settings</h1>
+        <p className="muted">Defaults for capture and accuracy. Changes apply to the next meeting — the current transcript is never touched.</p>
       </header>
 
       <section className="panel">
