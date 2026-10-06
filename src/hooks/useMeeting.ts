@@ -14,6 +14,7 @@ export interface MeetingResult {
 export function useMeeting() {
   const [status, setStatus] = useState<MeetingStatus>("idle");
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
+  const [speakers, setSpeakers] = useState<string[]>([]);
   const [interim, setInterim] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -28,7 +29,15 @@ export function useMeeting() {
           break;
         case "segment":
           setSegments((prev) => [...prev, event.segment]);
+          setSpeakers((prev) =>
+            prev.includes(event.segment.speaker)
+              ? prev
+              : [...prev, event.segment.speaker],
+          );
           setInterim("");
+          break;
+        case "speakers":
+          setSpeakers(event.speakers);
           break;
         case "error":
           setError(event.message);
@@ -59,6 +68,7 @@ export function useMeeting() {
   const start = useCallback(async (spec: CaptureSpec, title: string) => {
     setError(null);
     setSegments([]);
+    setSpeakers([]);
     setInterim("");
     setResult(null);
     setElapsed(0);
@@ -104,9 +114,33 @@ export function useMeeting() {
     }
   }, [elapsed]);
 
+  const renameSpeaker = useCallback(async (from: string, to: string) => {
+    const display = to.trim();
+    if (!display) {
+      setError("Speaker name must not be empty.");
+      return;
+    }
+    try {
+      await api.sidecarSend({ type: "rename_speaker", from, to: display });
+      setSegments((prev) =>
+        prev.map((segment) =>
+          segment.speaker === from ? { ...segment, speaker: display } : segment,
+        ),
+      );
+      setSpeakers((prev) => {
+        if (!prev.includes(from)) return prev;
+        const next = prev.map((name) => (name === from ? display : name));
+        return [...new Set(next)];
+      });
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
   return {
     status,
     segments,
+    speakers,
     interim,
     error,
     elapsed,
@@ -115,6 +149,7 @@ export function useMeeting() {
     stop,
     pause,
     resume,
+    renameSpeaker,
     clearError: () => setError(null),
     clearResult: () => setResult(null),
   };

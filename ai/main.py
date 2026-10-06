@@ -13,12 +13,14 @@ Wire protocol (newline-delimited JSON, UTF-8):
         {"type": "start", "config": {...}}
         {"type": "audio", "data": "<base64 16kHz mono int16 PCM>"}
         {"type": "pause"} | {"type": "resume"} | {"type": "stop"}
+        {"type": "rename_speaker", "from": "Speaker 1", "to": "Tauhid"}
         {"type": "ping"}
 
     server -> client:
         {"type": "ready"}
         {"type": "interim", "text", "language", "speaker"}
         {"type": "segment", "segment": {...}}
+        {"type": "speakers", "speakers": [...]}
         {"type": "error", "message"}
         {"type": "system", "message"}
         {"type": "stopped", "folder", "markdown_path", "transcript"}
@@ -104,6 +106,18 @@ def normalize_speaker(label: str | None) -> str:
     return cleaned
 
 
+def resolve_speaker(label: str | None, names: dict[str, str] | None = None) -> str:
+    """Map a provider speaker label to its display name.
+
+    `names` maps canonical ids ("Speaker 1") to user-chosen names. Raw words
+    and timestamps are never touched; only the label is resolved.
+    """
+    canonical = normalize_speaker(label)
+    if names:
+        return names.get(canonical, canonical)
+    return canonical
+
+
 class SidecarSession:
     """Owns one meeting's provider session and transcript state."""
 
@@ -119,6 +133,7 @@ class SidecarSession:
         self._audio_chunks = 0
         self._audio_bytes = 0
         self._audio_by_source: dict[str, int] = {}
+        self._speaker_names: dict[str, str] = {}
 
     def stats(self) -> dict[str, Any]:
         return {
@@ -126,6 +141,63 @@ class SidecarSession:
             "audio_bytes": self._audio_bytes,
             "audio_by_source": self._audio_by_source,
         }
+
+    def _display_speaker(self, label: str | None) -> str:
+        return resolve_speaker(label, self._speaker_names)
+
+    def speakers(self) -> list[str]:
+        """Display names in order of first appearance."""
+        seen: list[str] = []
+        for seg in self._transcript.segments:
+            if seg.speaker not in seen:
+                seen.append(seg.speaker)
+        return seen
+
+    def _resolve_canonical(self, source: str) -> str | None:
+        """Resolve a rename source to a canonical speaker id.
+
+        Accepts a canonical id ("Speaker 1"), a current display name, and
+        either casing. Returns None for speakers never seen.
+        """
+        want = source.strip().lower()
+        for key in self._speaker_names:
+            if key.lower() == want:
+                return key
+        for key, val in self._speaker_names.items():
+            if val.lower() == want:
+                return key
+        stored = {seg.speaker for seg in self._transcript.segments}
+        for name in stored:
+            if name.lower() == want:
+                return normalize_speaker(name)
+        return None
+
+    async def rename_speaker(self, from_label: str | None, to_name: str | None) -> bool:
+        """Rename a speaker everywhere: past segments, future segments, output.
+
+        Returns True when applied. Past segment words and timestamps are
+        untouched; only labels change. Renaming two speakers to the same name
+        merges them in display, which is reported back in the speakers event.
+        """
+        display = (to_name or "").strip()
+        if not display:
+            await self.send({"type": "error", "message": "speaker name must not be empty"})
+            return False
+        source = (from_label or "").strip()
+        if not source:
+            await self.send({"type": "error", "message": "speaker to rename must be specified"})
+            return False
+        canonical = self._resolve_canonical(source)
+        if canonical is None:
+            await self.send({"type": "error", "message": f"unknown speaker: {source}"})
+            return False
+        previous = self._speaker_names.get(canonical, canonical)
+        self._speaker_names[canonical] = display
+        for seg in self._transcript.segments:
+            if seg.speaker == previous:
+                seg.speaker = display
+        await self.send({"type": "speakers", "speakers": self.speakers()})
+        return True
 
     async def send(self, payload: dict[str, Any]) -> None:
         data = (json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8")
@@ -187,13 +259,13 @@ class SidecarSession:
                     "type": "interim",
                     "text": event.text,
                     "language": detect_language(event.text, event.language),
-                    "speaker": normalize_speaker(event.speaker),
+                    "speaker": self._display_speaker(event.speaker),
                 }
             )
         elif event.kind == "segment":
             segment = TranscriptSegment(
                 id=self._transcript.next_segment_id(),
-                speaker=normalize_speaker(event.speaker),
+                speaker=self._display_speaker(event.speaker),
                 start=event.start or 0.0,
                 end=event.end or 0.0,
                 text=event.text,
@@ -250,6 +322,7 @@ class SidecarSession:
                 self._metadata.duration_seconds = (
                     datetime.now(timezone.utc) - self._started_at
                 ).total_seconds()
+            self._metadata.participants = self.speakers()
 
         folder = None
         markdown_path = None
@@ -313,6 +386,8 @@ async def handle_client(
                 await session.resume()
             elif msg_type == "stop":
                 await session.stop(message.get("config", {}))
+            elif msg_type == "rename_speaker":
+                await session.rename_speaker(message.get("from"), message.get("to"))
             elif msg_type == "ping":
                 await session.send({"type": "pong", **session.stats()})
             else:

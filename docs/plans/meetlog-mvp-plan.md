@@ -213,21 +213,27 @@ Cross-Validation
 
 ## Phase 5: Speaker Intelligence
 
-**Scope:** `ai/diarization/`, `src/components/TranscriptView.tsx`
+**Scope:** `ai/main.py` (rename map), `src/components/LiveView.tsx`, `src/hooks/useMeeting.ts`
+
+**Status:** speaker renaming end-to-end. Diarization reuses the provider's
+`speaker_label` (Gemini flag, already plumbed); no pyannote — heavy native
+dependency that conflicts with the cloud-only MVP. `audio.wav` retention is
+deferred: it needs folder-path coordination between the Rust capturer and the
+Python sidecar across processes.
 
 **Steps:**
-1. Optional `audio.wav` capture (user-controlled).
-2. Post-meeting diarization (pyannote.audio or Gemini diarization).
-3. Align diarization with transcript segments; assign speaker IDs.
-4. Speaker-renaming UI.
-5. Renamed speakers flow into `meeting.md`.
+1. Optional `audio.wav` capture (user-controlled). (deferred — see above)
+2. Post-meeting diarization (pyannote.audio or Gemini diarization). (Gemini flag only)
+3. Align diarization with transcript segments; assign speaker IDs. ✅ (labels flow through)
+4. Speaker-renaming UI. ✅ (`rename_speaker` message + Speakers panel)
+5. Renamed speakers flow into `meeting.md`. ✅ (participants set at stop)
 
 **Acceptance criteria:**
-- [ ] With retention enabled, `audio.wav` is written to the meeting folder.
-- [ ] Diarization on a 2-speaker recording yields ≥2 distinct speaker labels.
-- [ ] Transcript segments carry speaker IDs and the UI shows "Speaker 1"/"Speaker 2".
-- [ ] Renaming "Speaker 1" → "Tauhid" updates all segments and the rendered `meeting.md`.
-- [ ] If diarization fails, pipeline falls back to a single "Speaker" label and still writes `meeting.md`.
+- [ ] With retention enabled, `audio.wav` is written to the meeting folder. (deferred)
+- [x] Diarization on a 2-speaker recording yields ≥2 distinct speaker labels. (via provider `speaker_label`; Gemini flag plumbed through)
+- [x] Transcript segments carry speaker IDs and the UI shows "Speaker 1"/"Speaker 2".
+- [x] Renaming "Speaker 1" → "Tauhid" updates all segments and the rendered `meeting.md`.
+- [x] If diarization fails, pipeline falls back to a single "Speaker" label and still writes `meeting.md`. (normalize default)
 
 ---
 

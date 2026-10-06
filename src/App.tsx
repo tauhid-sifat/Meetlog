@@ -125,6 +125,7 @@ function App() {
           <LiveView
             status={meeting.status}
             segments={meeting.segments}
+            speakers={meeting.speakers}
             interim={meeting.interim}
             elapsed={meeting.elapsed}
             error={meeting.error}
@@ -132,6 +133,7 @@ function App() {
             onPause={meeting.pause}
             onResume={meeting.resume}
             onStop={meeting.stop}
+            onRenameSpeaker={meeting.renameSpeaker}
             onOpenMarkdown={(path) => api.openPath(path)}
             onOpenFolder={(path) => api.openPath(path)}
           />

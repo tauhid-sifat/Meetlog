@@ -11,6 +11,7 @@ export type SidecarEvent =
   | { type: "ready" }
   | { type: "interim"; text: string; language: string; speaker: string }
   | { type: "segment"; segment: TranscriptSegment }
+  | { type: "speakers"; speakers: string[] }
   | { type: "error"; message: string }
   | { type: "system"; message: string }
   | {

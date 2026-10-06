@@ -186,6 +186,29 @@ select:focus {
   margin: 6px 0;
 }
 
+/* speaker renaming */
+.speakers-panel {
+  margin-bottom: 12px;
+}
+
+.speaker-row {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.speaker-row:last-child {
+  margin-bottom: 0;
+}
+
+.speaker-id {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .checkbox {
   display: flex;
   align-items: center;

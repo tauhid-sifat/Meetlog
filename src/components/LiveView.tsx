@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "../hooks/useMeeting";
 import type { MeetingResult } from "../hooks/useMeeting";
 import type { MeetingStatus, TranscriptSegment } from "../types";
@@ -6,6 +6,7 @@ import type { MeetingStatus, TranscriptSegment } from "../types";
 interface Props {
   status: MeetingStatus;
   segments: TranscriptSegment[];
+  speakers: string[];
   interim: string;
   elapsed: number;
   error: string | null;
@@ -13,13 +14,49 @@ interface Props {
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
+  onRenameSpeaker: (from: string, to: string) => void;
   onOpenMarkdown: (path: string) => void;
   onOpenFolder: (path: string) => void;
+}
+
+function SpeakerRow({
+  name,
+  onRename,
+}: {
+  name: string;
+  onRename: (from: string, to: string) => void;
+}) {
+  const [draft, setDraft] = useState(name);
+  useEffect(() => {
+    setDraft(name);
+  }, [name]);
+  const changed = draft.trim() !== "" && draft.trim() !== name;
+  return (
+    <div className="speaker-row">
+      <span className="speaker-id mono">{name}</span>
+      <input
+        value={draft}
+        aria-label={`Rename ${name}`}
+        onChange={(e) => setDraft(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && changed) onRename(name, draft.trim());
+        }}
+      />
+      <button
+        className="secondary"
+        disabled={!changed}
+        onClick={() => onRename(name, draft.trim())}
+      >
+        Rename
+      </button>
+    </div>
+  );
 }
 
 export function LiveView({
   status,
   segments,
+  speakers,
   interim,
   elapsed,
   error,
@@ -27,6 +64,7 @@ export function LiveView({
   onPause,
   onResume,
   onStop,
+  onRenameSpeaker,
   onOpenMarkdown,
   onOpenFolder,
 }: Props) {
@@ -71,6 +109,19 @@ export function LiveView({
             </>
           )}
         </div>
+      )}
+
+      {speakers.length > 0 && (
+        <section className="panel speakers-panel">
+          <h2>Speakers</h2>
+          {speakers.map((speaker) => (
+            <SpeakerRow
+              key={speaker}
+              name={speaker}
+              onRename={onRenameSpeaker}
+            />
+          ))}
+        </section>
       )}
 
       <div className="transcript" ref={scrollRef}>
